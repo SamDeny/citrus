@@ -1,0 +1,58 @@
+{
+    "name": "crate/citrus",
+    "type": "library",
+    "version": "0.1.0",
+    "description": "The main Application Framework behind our headless API-driven Crate CMS.",
+    "keywords": [
+        "application",
+        "framework",
+        "router",
+        "routing",
+        "psr"
+    ],
+    "homepage": "https://crate.md",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "rat.md",
+            "email": "info@crate.md",
+            "role": "Developer"
+        },
+        {
+            "name": "Artur Heinze",
+            "email": "artur@agentejo.com",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "php": "^8.0.0",
+        "ext-json": "*",
+        "ext-mbstring": "*",
+        "php-di/php-di": "^6.4.0",
+        "psr/cache": "^3.0.0",
+        "psr/container": "^1.0.0",
+        "psr/event-dispatcher": "^1.0.0",
+        "psr/http-message": "^1.0.1",
+        "psr/http-server-handler": "^1.0.1",
+        "psr/http-server-middleware": "^1.0.1",
+        "psr/log": "^3.0.0"
+    },
+    "suggest": {
+        "php-di/php-di": "The dependency injection container for humans."
+    },
+    "autoload": {
+        "psr-4": {
+            "Citrus\\": "src/"
+        },
+        "files": [
+            "src/polyfills.php",
+            "src/functions.php"
+        ]
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    }
+}
