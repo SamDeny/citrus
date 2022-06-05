@@ -4,7 +4,7 @@ namespace Citrus\Contracts;
 
 use Citrus\Framework\Application;
 
-interface Runtime
+interface RuntimeInterface
 {
 
     /**
@@ -15,17 +15,24 @@ interface Runtime
     public function __construct(Application $application);
 
     /**
-     * Basic Initialization Method
+     * Basic Bootstrap method
      *
      * @return void
      */
-    public function init(): void;
+    public function bootstrap(): void;
 
     /**
-     * Basic Finish Method
+     * Before Finish Method
      *
      * @return void
      */
-    public function finish(): void;
+    public function beforeFinish(): void;
+
+    /**
+     * After Finish Method
+     *
+     * @return void
+     */
+    public function afterFinish(): void;
 
 }

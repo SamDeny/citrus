@@ -4,9 +4,9 @@ namespace Citrus\Console\Commands;
 
 use Citrus\Console\Console;
 use Citrus\Console\Writer;
-use Citrus\Contracts\Consolecommand;
+use Citrus\Contracts\CommandInterface;
 
-class AboutCommand implements Consolecommand
+class AboutCommand implements CommandInterface
 {
 
     /**

@@ -29,6 +29,7 @@
         "ext-json": "*",
         "ext-mbstring": "*",
         "php-di/php-di": "^6.4.0",
+        "php-ds/php-ds": "^1.4",
         "psr/cache": "^3.0.0",
         "psr/container": "^1.0.0",
         "psr/event-dispatcher": "^1.0.0",
@@ -38,7 +39,7 @@
         "psr/log": "^3.0.0"
     },
     "suggest": {
-        "php-di/php-di": "The dependency injection container for humans."
+        "ext-ds": "Increase performance by using the DS extension instead of the polyfill."
     },
     "autoload": {
         "psr-4": {

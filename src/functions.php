@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 
 if (!function_exists('citrus')) {
     /**
@@ -36,7 +36,7 @@ if (!function_exists('env')) {
      */
     function env(string $key, mixed $default = null)
     {
-        return \Citrus\Framework\Configurator::getInstance()->getEnv($key, $default);
+        return \Citrus\Framework\Configurator::getInstance()->getEnvironmentData($key, $default);
     }
 }
 
@@ -50,10 +50,9 @@ if (!function_exists('config')) {
      */
     function config(string $key, mixed $default = null)
     {
-        return \Citrus\Framework\Configurator::getInstance()->getConfig($key, $default);
+        return \Citrus\Framework\Configurator::getInstance()->getConfiguration($key, $default);
     }
 }
-
 
 if (!function_exists('path')) {
     /**
@@ -66,5 +65,30 @@ if (!function_exists('path')) {
     function path(string $alias, ...$paths): string
     {
         return \Citrus\Framework\Application::getInstance()->getPath($alias, ...$paths);
+    }
+}
+
+if (!function_exists('event')) {
+    /**
+     * Listen for or Dispatch an event.
+     *
+     * @param string|Event The event (class) name to listen for or the event 
+     *                     itself to dispatch.
+     * @param mixed The event listener / callback handler to be called, when the 
+     *              first value is the event (class) name.
+     * @param ?int An optional priority value for the event listener / callback
+     *             handler function. 
+     * @return mixed
+     */
+    function event()
+    {
+        $citrus = \Citrus\Framework\Application::getInstance();
+        $event = func_get_arg(0);
+
+        if ($event instanceof \Citrus\Events\Event) {
+            return $citrus->getEventManager()->dispatch($event);
+        } else {
+            return $citrus->getEventManager()->listen(...func_get_args());
+        }
     }
 }

@@ -3,22 +3,19 @@
 namespace Citrus\Framework;
 
 use Citrus\Console\Console;
-use Citrus\Contracts\Runtime;
+use Citrus\Contracts\RuntimeInterface;
+use Citrus\Events\AfterFinishEvent;
+use Citrus\Events\BeforeFinishEvent;
 use Citrus\Exceptions\CitrusException;
+use Citrus\Framework\Configurator;
+use Citrus\Framework\EventManager;
 use Citrus\Http\Request;
 use DI\Container;
 use DI\ContainerBuilder;
-use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ServerRequestInterface;
-use ReflectionFunction;
 
 class Application
 {
-
-    /**
-     * Environment Key.
-     */
-    const ENVIRONMENT_KEY = 'CRATE_ENV';
 
     /**
      * Citrus Version
@@ -69,11 +66,18 @@ class Application
     protected Configurator $configurator;
 
     /**
+     * Application Event Manager
+     *
+     * @var EventManager
+     */
+    protected EventManager $eventManager;
+
+    /**
      * Optional Runtime Service for this Application
      *
-     * @var ?Runtime
+     * @var ?RuntimeInterface
      */
-    protected ?Runtime $runtime = null;
+    protected ?RuntimeInterface $runtime = null;
 
     /**
      * Application Container
@@ -130,10 +134,11 @@ class Application
         $this->root = $root;
         $this->startTime = floatval(microtime(true));
         $this->configurator = new Configurator;
+        $this->eventManager = new EventManager;
     }
 
     /**
-     * Get Citrus Application Version
+     * Receive Citrus Application Version
      *
      * @return string
      */
@@ -143,7 +148,7 @@ class Application
     }
 
     /**
-     * Get used PHP Version
+     * Receive used PHP Version
      *
      * @return string
      */
@@ -153,7 +158,7 @@ class Application
     }
 
     /**
-     * Get Applcation Starttime
+     * Receive Applcation Starttime
      *
      * @return float
      */
@@ -163,20 +168,46 @@ class Application
     }
 
     /**
+     * Receive Applcation Configurator
+     *
+     * @return Configurator
+     */
+    public function getConfigurator(): Configurator
+    {
+        return $this->configurator;
+    }
+
+    /**
+     * Receive Application Event Manager
+     *
+     * @param string $class
+     * @return EventManager
+     */
+    public function getEventManager(): EventManager
+    {
+        return $this->eventManager;
+    }
+
+    /**
      * Load DotEnv Environment
      * 
-     * @param ?string $path_or_file The path containing the .env file(s), the filepath directly or 
-     *                null to create the filepath from the rootPath.
+     * @param ?string $pathOrFile The path containing the .env file(s), the 
+     *                direct filepath or just null to use the root path.
+     * @param string $endKey The primary key which determines the general 
+     *               environment Citrus is currently in.
      * @return void
      */
-    public function loadEnvironment(?string $path_or_file = null): void
+    public function loadEnvironment(?string $pathOrFile = null, string $envKey = 'CITRUS_ENV'): void
     {
-        if (is_null($path_or_file)) {
-            $path_or_file = $this->root . DIRECTORY_SEPARATOR . '.env';
+        if (is_null($pathOrFile)) {
+            $pathOrFile = $this->root . DIRECTORY_SEPARATOR . '.env';
         }
-        $this->configurator->registerEnv($_ENV, '_ENV');
-        $this->configurator->registerEnv($_SERVER, '_SERVER');
-        $this->configurator->loadEnv($path_or_file, 'CREATE_ENV', true, '_LOCAL');
+
+        $this->configurator->setEnvironmentKey($envKey);
+        $this->configurator->setEnvironmentData($_ENV);
+        $this->configurator->setEnvironmentData($_SERVER);
+        $this->configurator->loadEnvironmentFile($pathOrFile, true);
+        $this->configurator->lockEnvironment();
     }
 
     /**
@@ -186,7 +217,7 @@ class Application
      */
     public function getEnvironment(): string
     {
-        return $this->configurator->getEnv(self::ENVIRONMENT_KEY, 'production');
+        return $this->configurator->getEnvironment('production');
     }
 
     /**
@@ -334,7 +365,7 @@ class Application
         ]);
 
         // Enable Caching
-        if (!$this->isProduction() && $this->hasDirectory('cache')) {
+        if ($this->isProduction() && $this->hasDirectory('cache')) {
             $builder->enableCompilation($this->getPath('cache'));
             $builder->writeProxiesToFile(true, $this->getPath('cache', 'proxies'));
         }
@@ -372,20 +403,20 @@ class Application
      */
     public function useRuntimeService(string $class): void
     {
-        if (!in_array(Runtime::class, class_implements($class))) {
+        if (!in_array(RuntimeInterface::class, class_implements($class))) {
             throw new CitrusException("The passed class '$class' does not implement the Runtime contract.");
         }
         $this->runtime = new $class($this);
-        $this->runtime->init();
+        $this->runtime->bootstrap();
     }
 
     /**
      * Receive the registered Runtime Service
      *
      * @param string $class
-     * @return ?Runtime
+     * @return ?RuntimeInterface
      */
-    public function getRuntimeService(): Runtime
+    public function getRuntimeService(): ?RuntimeInterface
     {
         return $this->runtime;
     }
@@ -494,7 +525,6 @@ class Application
 
 
 
-
     /**
      * Load Configuration File
      *
@@ -520,8 +550,8 @@ class Application
         if ($this->container instanceof \Invoker\InvokerInterface) {
             $this->container->call($func);
         } else {
-            $reflection = new ReflectionFunction($func);
-            var_dump(strval($reflection->getParameters()[0]->getType()));
+            $reflection = new \ReflectionFunction($func);
+            var_dump('oh', strval($reflection->getParameters()[0]->getType()));
         }
     }
 
@@ -532,13 +562,21 @@ class Application
      */
     public function finish()
     {
+        $this->eventManager->dispatch(new BeforeFinishEvent([$this]));
+        
+        if ($this->runtime) {
+            $this->runtime->beforeFinish();
+        }
+
         if (!$this->container && $this->containerBuilder) {
             $this->buildContainer();
         }
 
         if ($this->runtime) {
-            $this->runtime->finish();
+            $this->runtime->afterFinish();
         }
+
+        $this->eventManager->dispatch(new AfterFinishEvent([$this]));
     }
 
     /**

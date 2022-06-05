@@ -3,9 +3,10 @@
 namespace Citrus\Framework;
 
 use Citrus\Exceptions\CitrusException;
+use Citrus\Structures\Dictionary;
 use Citrus\Utilities\StringUtility;
 
-class Configurator 
+class Configurator
 {
 
     /**
@@ -29,26 +30,34 @@ class Configurator
         return self::$instance;
     }
 
+
     /**
-     * All available Environment Arrays.
+     * Primary Environment Key.
      *
+     * @var string|null
+     */
+    private ?string $environmentKey = null;
+
+    /**
+     * Current Environment Status
+     *
+     * @var string
+     */
+    private string $environmentStatus = 'unlocked';
+
+    /**
+     * Available Environment Data Sets (first-in-last-out)
+     * 
      * @var array
      */
     protected array $environments = [];
 
     /**
-     * The local Environment alias.
-     *
-     * @var ?string
+     * Available Configuration Dictionary
+     * 
+     * @var Dictionary
      */
-    protected ?string $localEnvironment = null;
-
-    /**
-     * Configuration Key => Values.
-     *
-     * @var array
-     */
-    protected array $configuration = [];
+    protected Dictionary $configs;
 
     /**
      * Create a new Configurator instance.
@@ -61,44 +70,78 @@ class Configurator
             throw new CitrusException('The Configurator cannot be initialized twice.');
         }
         self::$instance = $this;
+
+        $this->configs = new Dictionary;
     }
 
     /**
-     * Register new Environment array.
+     * Set the primary envionment key.
      *
-     * @param array $env
-     * @param string $alias
+     * @param string $envKey The desired environment key to set.
      * @return void
-     * @throws CitrusException The apssed environment alias '%s' does already exist.
+     * @throws CitrusException The environment has already been locked, you cannot further use this method.
      */
-    public function registerEnv(array &$env, string $alias)
+    public function setEnvironmentKey(string $envKey): void
     {
-        if (array_key_exists($alias, $this->environments)) {
-            throw new CitrusException("The passed environment alias '$alias' does already exist.");
+        if ($this->environmentStatus === 'locked') {
+            throw new CitrusException('The environment has already been locked, you cannot further use this method.');
         }
-        $this->environments[$alias] = &$env;
+        $this->environmentKey = strtoupper($envKey);
     }
 
     /**
-     * Load Environment File[s]
+     * Lock environment and prevent further changes.
      *
-     * @param string $path
-     * @param string $env_key
-     * @param boolean $load_subenv
      * @return void
      */
-    public function loadEnv(string $path, string $env_key = '', bool $load_subenv = true, string $alias = '_LOCAL'): void
+    public function lockEnvironment(): void
     {
+        $this->environmentStatus = 'locked';
+
+        // The First environment arrays are the last to search in
+        $this->environments = array_reverse($this->environments);
+    }
+
+    /**
+     * Set environment data using an array.
+     *
+     * @param array $data The plain environment array to set.
+     * @return void
+     * @throws CitrusException The environment has already been locked, you cannot further use this method.
+     */
+    public function setEnvironmentData(array &$data)
+    {
+        if ($this->environmentStatus === 'locked') {
+            throw new CitrusException('The environment has already been locked, you cannot further use this method.');
+        }
+        $this->environments[] = &$data;
+    }
+
+    /**
+     * Load environment data using a file/path.
+     *
+     * @param string $path The direct filepath to the desired environment file.
+     * @param boolean $loadSubs True to subsequently laod environment-specific, 
+     *                files, if available (ex. `.env.development`).
+     * @return void
+     * @throws CitrusException The environment has already been locked, you cannot further use this method.
+     * @throws CitrusException The passed filepath '%s' does not exist or is not a file.
+     */
+    public function loadEnvironmentFile(string $path, bool $loadSubs = false)
+    {
+        if ($this->environmentStatus === 'locked') {
+            throw new CitrusException('The environment has already been locked, you cannot further use this method.');
+        }
+
         if (!file_exists($path) || !is_file($path)) {
-            return;
+            throw new CitrusException("The passed filepath '$path' does not exist or is not a file.");
         }
 
-        // Load Environment Data
-        [$result, $evaluate] = $this->parseEnv(file_get_contents($path));
+        // Parse Environment
+        [$result, $evaluate] = $this->parseEnvironment(file_get_contents($path));
 
-        // Load Environment Data based on env_key
-        $env_key = strtoupper($env_key);
-        if ($load_subenv && !empty($env_key) &&  isset($result[$env_key])) {
+        // Parse subsequently Environments 
+        if ($loadSubs && !empty($env_key) &&  isset($result[$env_key])) {
             $key = strtolower($result[$env_key]);
     
             $path = dirname($path) . DIRECTORY_SEPARATOR . '.env.' . $key;
@@ -111,7 +154,7 @@ class Configurator
             }
         }
 
-        // Lazy Evaluation
+        // Lacy Evaluation
         foreach ($evaluate AS $key => $val) {
             if ($result[$key] !== chr(0)) {
                 continue;   // Key has been overwritten by another .env file 
@@ -120,24 +163,26 @@ class Configurator
         }
 
         // Set Environment Data
-        $this->localEnvironment = $alias;
-        $this->registerEnv($result, $alias);
+        $this->setEnvironmentData($result);
     }
 
     /**
-     * Get Environment Value
+     * Get environment data.
      *
      * @param string $key
-     * @param string $default
+     * @param mixed $default
      * @return mixed
      */
-    public function getEnv(string $key, mixed $default = null): mixed
+    public function getEnvironmentData(string $key, mixed $default = null): mixed
     {
         $local = trim(strtoupper($key));
 
-        foreach ($this->environments AS $alias => $envs) {
-            if (array_key_exists($alias === $this->localEnvironment? $local: $key, $envs)) {
-                return $envs[$alias === $this->localEnvironment? $local: $key];
+        foreach ($this->environments AS $environment) {
+            if (array_key_exists($key, $environment)) {
+                return $environment[$key];
+            }
+            if (array_key_exists($local, $environment)) {
+                return $environment[$local];
             }
         }
 
@@ -145,100 +190,17 @@ class Configurator
     }
 
     /**
-     * Load Configuration File[s]
+     * Get current environment.
      *
-     * @param string $path
-     * @param string|null $alias
-     * @param string|null $format The configuration file format. Supported: 'php', 'json', 'ini'.
-     * @return void
+     * @param string $default
+     * @return string
      */
-    public function loadConfig(string $path, ?string $alias = null, ?string $format = null): void
+    public function getEnvironment(string $default = 'production'): string
     {
-        if (!file_exists($path)) {
-            return;
+        if (empty($this->environmentKey)) {
+            return $default;
         }
-        if(($path = realpath($path)) === false) {
-            return;
-        }
-
-        if (!is_file($path)) {
-            $handle = opendir($path);
-            while (($file = readdir($handle)) !== false) {
-                if (!is_file($path . DIRECTORY_SEPARATOR . $file)) {
-                    continue;
-                }
-                if ($file[0] === '.') {
-                    continue;
-                }
-
-                $alias = substr($file, strpos($file, '.'));
-                $format = pathinfo($path . DIRECTORY_SEPARATOR . $file, PATHINFO_EXTENSION);
-                if (!in_array($format, ['php', 'json', 'ini'])) {
-                    continue;
-                }
-                $this->loadConfig($path . DIRECTORY_SEPARATOR . $file, $alias, $format);
-            }
-            closedir($handle);
-            return;
-        }
-
-        if (is_file($path)) {
-            $filename = basename($path);
-            if ($filename[0] === '.' || strpos($filename, '.') === false) {
-                return;
-            }
-
-            // Fill Alias
-            if (is_null($alias)) {
-                $alias = substr($filename, strpos($filename, '.'));
-            }
-
-            // Check Alias
-            $alias = strtolower($alias);
-            if (array_key_exists($alias, $this->configuration)) {
-                return;
-            }
-
-            // Fill & Check Format
-            if (is_null($format)) {
-                $format = pathinfo($path, PATHINFO_EXTENSION);
-            }
-            if (!in_array($format, ['php', 'json', 'ini'])) {
-                return;
-            }
-
-            // Read & Parse Content
-            if ($format === 'php') {
-                $content = include $path;
-            } else if ($format === 'json') {
-                $content = json_decode(file_get_contents($path), true);
-                $this->parseConfig($config, 'json');
-            } else if ($format === 'ini') {
-                $content = parse_ini_file($path, true);
-                $this->parseConfig($config, 'init');
-            }
-            
-            // Check Content
-            if (!is_array($content)) {
-                return;
-            }
-
-            // Set Configuration
-            $this->configuration[$alias] = $content;
-        }
-    }
-
-    /**
-     * Get Configuration Value
-     *
-     * @param string $path
-     * @return void
-     */
-    public function getConfig(string $path, mixed $default = null): mixed
-    {
-        var_dump($path);
-        var_dump($this->configuration);
-        return $default;
+        return $this->getEnvironmentData($this->environmentKey, $default);
     }
 
     /**
@@ -247,7 +209,7 @@ class Configurator
      * @param string $content
      * @return array
      */
-    protected function parseEnv(string $content): array
+    protected function parseEnvironment(string $content): array
     {
         if (empty($content)) {
             return [];
@@ -320,14 +282,38 @@ class Configurator
     }
 
     /**
-     * Parse Configuration Data
+     * Set Configuration using an alias and the raw config data.
      *
-     * @param array $content
-     * @return array
+     * @param string $alias
+     * @param array $config
+     * @return void
      */
-    protected function parseConfig(array $content): ?array
+    public function setConfiguration(string $alias, array $config)
     {
-        return [];
+
+    }
+
+    /**
+     * Set multiple alias => config Configurations.
+     *
+     * @param array $configs
+     * @return void
+     */
+    public function setConfigurations(array $configs)
+    {
+        array_walk($configs, fn($val, $key) => $this->setConfiguration($key, $val));
+    }
+
+    /**
+     * Get Configuration using the key path.
+     *
+     * @param string $key
+     * @param mixed $default
+     * @return void
+     */
+    public function getConfiguration(string $key, mixed $default = null)
+    {
+
     }
 
 }
