@@ -4,6 +4,11 @@ namespace Citrus\Router;
 
 use Citrus\Exceptions\RouterException;
 
+/**
+ * Citrus Router / Route
+ * The Citrus Router system is based on the nikic/FastRoute package and has 
+ * been directly integrated here, since FastRoute isn't active developed.
+ */
 class Route
 {
 
@@ -38,7 +43,7 @@ class Route
     protected array $methods;
 
     /**
-     * Route Regular Expression
+     * Raw Route String
      *
      * @var string
      */
@@ -47,154 +52,266 @@ class Route
     /**
      * Assigned Route Handler
      *
-     * @var array
+     * @var mixed
      */
     protected mixed $handler;
 
     /**
-     * API supported route (Route can be called via Rest-API)
-     *
-     * @var boolean
-     */
-    protected bool $api = false;
-
-    /**
-     * CLI supported route (Route can be called via Citrus CLI)
-     *
-     * @var boolean
-     */
-    protected bool $cli = false;
-
-    /**
-     * AJAX supported route (Route can be called via XHR Requests)
-     *
-     * @var boolean
-     */
-    protected bool $ajax = false;
-
-    /**
-     * Base URL on which this route applies
-     *
-     * @var ?string
-     */
-    protected ?string $url = null;
-
-    /**
-     * Unique route name
-     *
-     * @var ?string
-     */
-    protected ?string $name = null;
-
-    /**
-     * Assigned route middlewares
+     * Parsed Route Details
      *
      * @var array
      */
-    protected array $middleware = [];
+    protected array $details;
 
     /**
-     * Assigned route parameters
+     * Route Type 
+     *
+     * @var string
+     */
+    protected ?string $type = null;
+
+    /**
+     * Processed Route Regular Expression
+     *
+     * @var ?string
+     */
+    protected ?string $regex = null;
+
+    /**
+     * Processed Route Parameters
      *
      * @var array
      */
     protected array $params = [];
 
     /**
-     * Create a new Route.
+     * Additional Route Base Domain/Path
+     *
+     * @var ?string
      */
-    public function __construct(array $methods, string $route, mixed $handler)
+    protected ?string $base = null;
+
+    /**
+     * Additional Route Name
+     *
+     * @var ?string
+     */
+    protected ?string $name = null;
+
+    /**
+     * Additional Route Middleware
+     *
+     * @var ?string
+     */
+    protected ?array $middleware = [];
+
+    /**
+     * Create a new Route.
+     *
+     * @param string|array $methods The supported HTTP method(s).
+     * @param string $route The raw route string.
+     * @param mixed $handler The callable / Closure callback handler.
+     * @param array $details The pased route details.
+     * @param array $params The parameters provided by this route.
+     */
+    public function __construct(string|array $methods, string $route, mixed $handler, array $details = [])
     {
-        $this->methods = $methods;
+        $this->methods = is_string($methods)? [$methods]: $methods;
         $this->route = $route;
         $this->handler = $handler;
+        $this->details = $details;
     }
 
     /**
-     * Public Getter
+     * Tests whether this route matches the passed string.
+     * PS.: This method is NOT used by the Dispatcher.
      *
-     * @param string $name
-     * @return mixed
+     * @param string $string
+     * @return boolean
      */
-    public function __get(string $name): mixed
+    public function matches(string $string): bool
     {
-        return $this->$name;
+        return (bool) preg_match('~^' . $this->regex . '$~', $string);
     }
 
     /**
-     * Assign a unique Route Name.
+     * Set route as static, if no type has been assigned yet.
      *
-     * @param string $name
-     * @return Route
+     * @return void
      */
-    public function name(string $name): Route
+    public function isStatic(): void
     {
-        $name = strtolower(trim($name));
-
-        // Unassign previous set name
-        if (!is_null($this->name)) {
-            if ($this->name === $name) {
-                return $this;
-            }
-            if (array_key_exists($this->name, self::$routes)) {
-                unset(self::$routes[$this->name]);
-            }
-            $this->name = null;
-
-            // Using an empty string unsets the previously assigned name
-            if ($name === '') {
-                return $this;
-            }
+        if ($this->type !== null) {
+            return;
         }
-
-        // Assign Name
-        if (empty($name)) {
-            throw new RouterException('The passed route name is invalid or empty.');
-        }
-        if (array_key_exists($name, self::$routes)) {
-            throw new RouterException('The passed route name does already exist.');
-        }
-        self::$routes[$name] = $this;
-        return $this;
+        $this->type = 'static';
     }
 
     /**
-     * Assign a new Middleware.
+     * Set route as dynamic, if no type has been assigned yet.
      *
-     * @param mixed $middleware
-     * @return Route
+     * @return void
      */
-    public function middleware(mixed $middleware): Route
+    public function isDynamic(): void
     {
-        if (is_array($middleware)) {
-            $this->middleware = array_merge($this->middleware, array_values($middleware));
+        if ($this->type !== null) {
+            return;
+        }
+        $this->type = 'dynamic';
+    }
+
+    /**
+     * Get Route Methods
+     *
+     * @return array
+     */
+    public function methods(): array
+    {
+        return $this->methods;
+    }
+
+    /**
+     * Get Raw Route
+     *
+     * @return string
+     */
+    public function route(): string
+    {
+        return $this->route;
+    }
+
+    /**
+     * Get Route Handler
+     *
+     * @return callable
+     */
+    public function handler(): callable
+    {
+        return $this->handler;
+    }
+
+    /**
+     * Get Route Details
+     *
+     * @return array
+     */
+    public function details(): array
+    {
+        return $this->details;
+    }
+
+    /**
+     * Get|Set Processed Route Regular Expression
+     *
+     * @param null|string $regex
+     * @return string|Route
+     */
+    public function regex(null|string $regex = null): string|Route
+    {
+        if (is_null($regex)) {
+            return $this->regex;
         } else {
-            $this->middleware = array_merge($this->middleware, [$middleware]);
+            $this->regex = $regex;
+            return $this;
         }
-        return $this;
     }
 
     /**
-     * Assign a new Validation Parameter - Validation Parameters are used to
-     * pre-validate a route before it gets executed and thus also before the 
-     * controller / handler is called.
+     * Get|Set Processed Route Parameters
      *
-     * @param string $param
-     * @param array $args
-     * @return Route
+     * @param null|array $params
+     * @return array
      */
-    public function param(string $param, array $args): Route
+    public function params(null|array $params = null): array|Route
     {
-        if (array_key_exists($param, $this->params)) {
-            throw new RouterException('The passed parameter has already been assigned to this route.');
+        if (is_null($params)) {
+            return $this->params;
+        } else {
+            $this->params = $params;
+            return $this;
         }
+    }
 
-        if (!class_exists($param)) {
-            throw new RouterException('The passed route parameter does not exist.');
+    /**
+     * Get|Set Route Base
+     *
+     * @param null|string $base
+     * @return string|Route
+     */
+    public function base(null|string $base = null): string|Route
+    {
+        if (is_null($base)) {
+            return $this->base;
+        } else {
+            if (($index = strpos($base, '://')) === 0) {
+                $base = substr($base, $index+3);
+            }
+
+            $this->base = rtrim($base, '/ ');
+            return $this;
         }
+    }
 
-        $this->params[$param] = $args;
-        return $this;
+    /**
+     * Get|Set Route Name
+     *
+     * @param null|string $name
+     * @return string|Route
+     */
+    public function name(null|string $name = null): string|Route
+    {
+        if (is_null($name)) {
+            return $this->name;
+        } else {
+            $name = strtolower(trim($name));
+
+            // Unassign previous set name
+            if (!is_null($this->name)) {
+                if ($this->name === $name) {
+                    return $this;
+                }
+                if (array_key_exists($this->name, self::$routes)) {
+                    unset(self::$routes[$this->name]);
+                }
+                $this->name = null;
+    
+                // Using an empty string unsets the previously assigned name
+                if ($name === '') {
+                    return $this;
+                }
+            }
+    
+            // Assign Name
+            if (empty($name)) {
+                throw new RouterException('The passed route name is invalid or empty.');
+            }
+            if (array_key_exists($name, self::$routes)) {
+                throw new RouterException('The passed route name does already exist.');
+            }
+            self::$routes[$name] = $this;
+            return $this;
+        }
+    }
+
+    /**
+     * Get|Set Route Middleware
+     *
+     * @param null|string|array $middleware
+     * @param boolean $append
+     * @return array|Route
+     */
+    public function middleware(null|string|array $middleware, bool $append = true): array|Route
+    {
+        if (is_null($middleware)) {
+            return $this->middleware;
+        } else {
+            if ($append) {
+                $this->middleware = array_merge($this->middleware, is_array($middleware)? $middleware: [$middleware]);
+            } else {
+                $this->middleware = is_array($middleware)? $middleware: [$middleware];
+            }
+            return $this;
+        }
     }
 
 }

@@ -4,10 +4,8 @@ namespace Citrus\Framework;
 
 use Ds\Map;
 use Ds\PriorityQueue;
-use Psr\EventDispatcher\EventDispatcherInterface;
-use Psr\EventDispatcher\ListenerProviderInterface;
 
-class EventManager implements EventDispatcherInterface, ListenerProviderInterface
+class EventManager
 {
 
     /**

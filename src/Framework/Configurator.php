@@ -3,26 +3,33 @@
 namespace Citrus\Framework;
 
 use Citrus\Exceptions\CitrusException;
-use Citrus\Structures\Dictionary;
-use Citrus\Utilities\StringUtility;
+use Citrus\Utilities\Dictionary;
+use Citrus\Utilities\Str;
 
+/**
+ * Application Configurator
+ * The application configurator is used by the main Citrus Application instance 
+ * itself to manage the available environment data and set configurations. You 
+ * can simple access this class by using the `env()` or `config()` methods or 
+ * some of the methods provided by the Application class.
+ */
 class Configurator
 {
 
     /**
-     * The current Configurator instance.
+     * Current Configurator instance.
      *
-     * @var Configurator|null
+     * @var self|null
      */
-    static protected ?Configurator $instance = null;
+    static protected ?self $instance = null;
 
     /**
-     * Get current Application instance
+     * Get current Configurator instance.
      *
-     * @return Configurator
+     * @return self
      * @throws CitrusException The Configurator has not been initialized yet.
      */
-    static public function getInstance(): Configurator
+    static public function getInstance(): self
     {
         if (!self::$instance) {
             throw new CitrusException('The Configurator has not been initialized yet.');
@@ -32,32 +39,32 @@ class Configurator
 
 
     /**
-     * Primary Environment Key.
+     * Main Context Key.
      *
-     * @var string|null
+     * @var string
      */
-    private ?string $environmentKey = null;
+    private string $contextKey = 'CITRUS_ENV';
 
     /**
-     * Current Environment Status
+     * Current Environment Status.
      *
      * @var string
      */
     private string $environmentStatus = 'unlocked';
 
     /**
-     * Available Environment Data Sets (first-in-last-out)
+     * Available Environment Data Sets (Priority: FILO).
      * 
      * @var array
      */
     protected array $environments = [];
 
     /**
-     * Available Configuration Dictionary
+     * Available Application Configurations.
      * 
      * @var Dictionary
      */
-    protected Dictionary $configs;
+    protected Dictionary $configurations;
 
     /**
      * Create a new Configurator instance.
@@ -66,68 +73,84 @@ class Configurator
      */
     public function __construct()
     {
-        if (self::$instance) {
+        if (isset(self::$instance)) {
             throw new CitrusException('The Configurator cannot be initialized twice.');
         }
         self::$instance = $this;
 
-        $this->configs = new Dictionary;
+        // Create Dictionary for Configurations
+        $this->configurations = new Dictionary();
     }
 
     /**
-     * Set the primary envionment key.
+     * Set the main environment context key.
      *
-     * @param string $envKey The desired environment key to set.
-     * @return void
+     * @param string $contextKey The desired environment context key to set.
+     * @return self
      * @throws CitrusException The environment has already been locked, you cannot further use this method.
      */
-    public function setEnvironmentKey(string $envKey): void
+    public function setContextKey(string $contextKey): self
     {
         if ($this->environmentStatus === 'locked') {
             throw new CitrusException('The environment has already been locked, you cannot further use this method.');
         }
-        $this->environmentKey = strtoupper($envKey);
+
+        $this->contextKey = strtoupper($contextKey);
+        return $this;
     }
 
     /**
-     * Lock environment and prevent further changes.
-     *
-     * @return void
+     * Get main environment context key
+     * 
+     * @return string
      */
-    public function lockEnvironment(): void
+    public function getContextKey(): string
+    {
+        return $this->contextKey;
+    }
+
+    /**
+     * Lock environment and prevent further changes (This has no affects to the 
+     * configuration parts / methods of this class).
+     *
+     * @return self
+     */
+    public function lockEnvironment(): self
     {
         $this->environmentStatus = 'locked';
-
-        // The First environment arrays are the last to search in
-        $this->environments = array_reverse($this->environments);
+        return $this;
     }
 
     /**
-     * Set environment data using an array.
+     * Set environment data array.
      *
      * @param array $data The plain environment array to set.
-     * @return void
+     * @return self
      * @throws CitrusException The environment has already been locked, you cannot further use this method.
      */
-    public function setEnvironmentData(array &$data)
+    public function setEnvironmentData(array &$data): self
     {
         if ($this->environmentStatus === 'locked') {
             throw new CitrusException('The environment has already been locked, you cannot further use this method.');
         }
-        $this->environments[] = &$data;
+
+        // Prepend the data due to the First-in Last-Out principle.
+        array_unshift($this->environments, $data);
+        return $this;
     }
 
     /**
-     * Load environment data using a file/path.
+     * Load environment file/path.
      *
      * @param string $path The direct filepath to the desired environment file.
-     * @param boolean $loadSubs True to subsequently laod environment-specific, 
-     *                files, if available (ex. `.env.development`).
-     * @return void
+     * @param boolean $loadSubs True to subsequently load context-specific, 
+     *                files, if available. Supports `.env.[CONTEXT]` and 
+     *                `.[CONTEXT].env` in this order.
+     * @return self
      * @throws CitrusException The environment has already been locked, you cannot further use this method.
      * @throws CitrusException The passed filepath '%s' does not exist or is not a file.
      */
-    public function loadEnvironmentFile(string $path, bool $loadSubs = false)
+    public function loadEnvironmentFile(string $path, bool $loadSubs = false): self
     {
         if ($this->environmentStatus === 'locked') {
             throw new CitrusException('The environment has already been locked, you cannot further use this method.');
@@ -139,15 +162,20 @@ class Configurator
 
         // Parse Environment
         [$result, $evaluate] = $this->parseEnvironment(file_get_contents($path));
+        $contextKey = $this->contextKey;
 
         // Parse subsequently Environments 
-        if ($loadSubs && !empty($env_key) &&  isset($result[$env_key])) {
-            $key = strtolower($result[$env_key]);
+        if ($loadSubs && !empty($contextKey) && isset($result[$contextKey])) {
+            $context = strtolower($result[$contextKey]);
     
-            $path = dirname($path) . DIRECTORY_SEPARATOR . '.env.' . $key;
-            if (file_exists($path)) {
-                [$temp1, $temp2] = $this->parseEnv(file_get_contents($path));
-                unset($temp1[$env_key]);
+            $subEnv = dirname($path) . DIRECTORY_SEPARATOR . ".env.{$context}";
+            if (file_exists($subEnv)) {
+                $subEnv = dirname($path) . DIRECTORY_SEPARATOR . ".{$context}.env";
+            }
+
+            if (file_exists($subEnv)) {
+                [$temp1, $temp2] = $this->parseEnvironment(file_get_contents($subEnv));
+                unset($temp1[$contextKey]);
 
                 $result = array_merge($result, $temp1);
                 $evaluate = array_merge($evaluate, $temp2);
@@ -164,47 +192,11 @@ class Configurator
 
         // Set Environment Data
         $this->setEnvironmentData($result);
+        return $this;
     }
 
     /**
-     * Get environment data.
-     *
-     * @param string $key
-     * @param mixed $default
-     * @return mixed
-     */
-    public function getEnvironmentData(string $key, mixed $default = null): mixed
-    {
-        $local = trim(strtoupper($key));
-
-        foreach ($this->environments AS $environment) {
-            if (array_key_exists($key, $environment)) {
-                return $environment[$key];
-            }
-            if (array_key_exists($local, $environment)) {
-                return $environment[$local];
-            }
-        }
-
-        return $default;
-    }
-
-    /**
-     * Get current environment.
-     *
-     * @param string $default
-     * @return string
-     */
-    public function getEnvironment(string $default = 'production'): string
-    {
-        if (empty($this->environmentKey)) {
-            return $default;
-        }
-        return $this->getEnvironmentData($this->environmentKey, $default);
-    }
-
-    /**
-     * Parse Environment File Content
+     * Parse Environment file content.
      *
      * @param string $content
      * @return array
@@ -214,7 +206,7 @@ class Configurator
         if (empty($content)) {
             return [];
         }
-        $content = StringUtility::normalizeEol($content);
+        $content = Str::normalizeEol($content);
         $lines = explode("\n", $content);
 
         // Walk through the passed content
@@ -282,6 +274,29 @@ class Configurator
     }
 
     /**
+     * Get environment data.
+     *
+     * @param string $key
+     * @param mixed $default
+     * @return mixed
+     */
+    public function getEnvironment(string $key, mixed $default = null): mixed
+    {
+        $local = trim(strtoupper($key));
+
+        foreach ($this->environments AS $environment) {
+            if (array_key_exists($key, $environment)) {
+                return $environment[$key];
+            }
+            if (array_key_exists($local, $environment)) {
+                return $environment[$local];
+            }
+        }
+
+        return $default;
+    }
+
+    /**
      * Set Configuration using an alias and the raw config data.
      *
      * @param string $alias
@@ -290,18 +305,7 @@ class Configurator
      */
     public function setConfiguration(string $alias, array $config)
     {
-
-    }
-
-    /**
-     * Set multiple alias => config Configurations.
-     *
-     * @param array $configs
-     * @return void
-     */
-    public function setConfigurations(array $configs)
-    {
-        array_walk($configs, fn($val, $key) => $this->setConfiguration($key, $val));
+        $this->configurations[$alias] = $config;
     }
 
     /**
@@ -313,7 +317,11 @@ class Configurator
      */
     public function getConfiguration(string $key, mixed $default = null)
     {
-
+        if (isset($this->configurations[$key])) {
+            return $this->configurations[$key];
+        } else {
+            return $default;
+        }
     }
 
 }

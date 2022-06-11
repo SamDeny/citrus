@@ -2,91 +2,142 @@
 
 namespace Citrus\Router;
 
-use Citrus\Exceptions\DispatcherException;
-use Psr\Http\Message\RequestInterface;
-use Psr\Http\Message\UriInterface;
-
+/**
+ * Citrus Router / Dispatcher
+ * The Citrus Router system is based on the nikic/FastRoute package and has 
+ * been directly integrated here, since FastRoute isn't active developed.
+ * @internal Internal usage for the main Router class only.
+ */
 class Dispatcher
 {
 
     /**
-     * Default available Route Patterns.
+     * Static Route Map
      *
-     * @var array
+     * @var array<string, array<string, mixed>>
      */
-    static protected array $patterns = [
-        ':any'      => '.*',
-        ':each'     => '.+',
-        ':num'      => '[0-9]+',
-        ':alpha'    => '[a-zA-Z]+',
-        ':alphanum' => '[0-9a-zA-Z]+',
-        ':slug'     => '[0-9a-zA-Z_-]+',
-        ':ns'       => '\@[a-zA-Z]{1}[0-9a-zA-Z_]+',
-        ':path'     => '[^\/]+',
-        ':id'       => '[0-9]+',
-        ':uuid'     => '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}',
-        ':year'     => '(?:19|2[0-9])[0-9]{2}',
-        ':month'    => '(?:0[1-9]|1[0-2])',
-        ':day'      => '(?:0[1-9]|[1-2][0-9]|3[0-1])',
-        ':date'     => '(?:19|2[0-9])[0-9]{2}\-(?:0[1-9]|1[0-2])\-(?:0[1-9]|[1-2][0-9]|3[0-1])',
-        ':locale'   => '[a-z]{2}(?:\_[a-zA-Z]{2})?'
-    ];
+    protected array $staticRouteMap = [];
 
     /**
-     * Add a new route pattern.
-     *
-     * @param string $name
-     * @param string $regex
-     * @return void
-     * @throws DispatcherException The passed pattern name '%s' must start with a colon.
-     * @throws DispatcherException The passed pattern name '%s' does already exist.
+     * Variable Route Data
+     * 
+     * @var array<string, array<array{regex: string, suffix?: string, routeMap: array<int|string, array{0: mixed, 1: array<string, string>}>}>>
      */
-    static public function addPattern(string $name, string $regex): void
+    protected array $variableRouteData = [];
+
+    /**
+     * Crate a new Route Dispatcher
+     * 
+     * @param array{0: array<string, array<string, mixed>>, 1: array<string, array<array{regex: string, suffix?: string, routeMap: array<int|string, array{0: mixed, 1: array<string, string>}>}>>} $data
+     */
+    public function __construct(array $data = [])
     {
-        if (strpos($name, ':') !== 0) {
-            throw new DispatcherException("The passed pattern name '$name' must start with a colon.");
-        }
-        $name = strtolower($name);
-
-        if (array_key_exists($name, self::$patterns)) {
-            throw new DispatcherException("The passed pattern name '$name' does already exist.");
-        }
-
-        self::$patterns[$name] = $regex;
+        [$this->staticRouteMap, $this->variableRouteData] = $data;
     }
 
     /**
-     * Process an URI and return the most fitting Route object.
-     *
-     * @param string $method
-     * @param string $uri
-     * @return ?Route
+     * Disaptch a variable route.
+     * 
+     * @param mixed[] $routeData
+     * @return array{0: int, 1?: list<string>|mixed, 2?: array<string, string>}|null
      */
-    public function process(string $method, string $uri): ?Route
+    protected function dispatchVariableRoute(array $routeData, string $uri): ?array
     {
+        foreach ($routeData as $data) {
+            if (! preg_match($data['regex'], $uri, $matches)) {
+                continue;
+            }
+
+            [$route, $varNames] = $data['routeMap'][$matches['MARK']];
+
+            $vars = [];
+            $i = 0;
+            foreach ($varNames as $varName) {
+                $vars[$varName] = $matches[++$i];
+            }
+
+            return $route;
+        }
+
         return null;
     }
 
-    /**
-     * Dispatch a HTTP Request or Uri Interface
-     *
-     * @return void
-     */
-    public function dispatch(string $method, RequestInterface | UriInterface $request)
-    {
-
-    }
 
     /**
-     * Dispatch a simple URI string.
+     * Dispatches against the provided HTTP method verb and URI.
      *
-     * @param string $method
-     * @param string $uri
-     * @return void
+     * @return Route|array
      */
-    public function dispatchUri(string $method, string $uri)
+    public function dispatch(string $httpMethod, string $uri): Route|array
     {
+        if (isset($this->staticRouteMap[$httpMethod][$uri])) {
+            $route = $this->staticRouteMap[$httpMethod][$uri];
+            return $route;
+        }
 
+        $varRouteData = $this->variableRouteData;
+        if (isset($varRouteData[$httpMethod])) {
+            $route = $this->dispatchVariableRoute($varRouteData[$httpMethod], $uri);
+            if ($route !== null) {
+                return $route;
+            }
+        }
+
+        // For HEAD requests, attempt fallback to GET
+        if ($httpMethod === 'HEAD') {
+            if (isset($this->staticRouteMap['GET'][$uri])) {
+                $route = $this->staticRouteMap['GET'][$uri];
+                return $route;
+            }
+
+            if (isset($varRouteData['GET'])) {
+                $route = $this->dispatchVariableRoute($varRouteData['GET'], $uri);
+                if ($route !== null) {
+                    return $route;
+                }
+            }
+        }
+
+        // If nothing else matches, try fallback routes
+        if (isset($this->staticRouteMap['*'][$uri])) {
+            $route = $this->staticRouteMap['*'][$uri];
+            return $route;
+        }
+
+        if (isset($varRouteData['*'])) {
+            $route = $this->dispatchVariableRoute($varRouteData['*'], $uri);
+            if ($route !== null) {
+                return $route;
+            }
+        }
+
+        // Find allowed methods for this URI by matching against all other HTTP methods as well
+        $allowedMethods = [];
+        foreach ($this->staticRouteMap as $method => $uriMap) {
+            if ($method === $httpMethod || ! isset($uriMap[$uri])) {
+                continue;
+            }
+            $allowedMethods[] = $method;
+        }
+
+        foreach ($varRouteData as $method => $routeData) {
+            if ($method === $httpMethod) {
+                continue;
+            }
+
+            $result = $this->dispatchVariableRoute($routeData, $uri);
+            if ($result === null) {
+                continue;
+            }
+
+            $allowedMethods[] = $method;
+        }
+
+        // If there are no allowed methods the route simply does not exist
+        if ($allowedMethods !== []) {
+            return [405, $allowedMethods];
+        }
+        return [404, null];
     }
 
 }

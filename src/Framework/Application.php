@@ -2,17 +2,14 @@
 
 namespace Citrus\Framework;
 
-use Citrus\Console\Console;
-use Citrus\Contracts\RuntimeInterface;
-use Citrus\Events\AfterFinishEvent;
-use Citrus\Events\BeforeFinishEvent;
-use Citrus\Exceptions\CitrusException;
-use Citrus\Framework\Configurator;
-use Citrus\Framework\EventManager;
 use Citrus\Http\Request;
-use DI\Container;
-use DI\ContainerBuilder;
-use Psr\Http\Message\ServerRequestInterface;
+use Citrus\Router\Router;
+use Citrus\Exceptions\CitrusException;
+use Citrus\FileSystem\Parser\INIParser;
+use Citrus\FileSystem\Parser\JSONParser;
+use Citrus\FileSystem\Parser\PHPParser;
+use Citrus\FileSystem\Parser\YAMLParser;
+use Citrus\Http\Response;
 
 class Application
 {
@@ -23,29 +20,29 @@ class Application
     const VERSION = '0.1.0';
 
     /**
-     * Current Application instance.
+     * Citrus Application.
      *
-     * @var Application|null
+     * @var Application
      */
-    static protected ?Application $instance = null;
+    static protected Application $instance;
 
     /**
-     * Get current Application instance
+     * Get Citrus Application instance
      *
      * @return Application
-     * @throws CitrusException The Application has not been initialized yet.
+     * @throws CitrusException The Citrus Application has not been initialized yet.
      */
     static public function getInstance(): Application
     {
         if (!self::$instance) {
-            throw new CitrusException('The Application has not been initialized yet.');
+            throw new CitrusException('The Citrus Application has not been initialized yet.');
         }
         return self::$instance;
     }
 
 
     /**
-     * Root Application directory
+     * Application root path.
      *
      * @var string
      */
@@ -66,75 +63,41 @@ class Application
     protected Configurator $configurator;
 
     /**
-     * Application Event Manager
-     *
-     * @var EventManager
-     */
-    protected EventManager $eventManager;
-
-    /**
-     * Optional Runtime Service for this Application
-     *
-     * @var ?RuntimeInterface
-     */
-    protected ?RuntimeInterface $runtime = null;
-
-    /**
      * Application Container
      *
-     * @var ?Container
+     * @var Container
      */
-    protected ?Container $container = null;
+    protected Container $container;
+
 
     /**
-     * Application Container Builder
-     *
-     * @var ?ContainerBuilder
-     */
-    protected ?ContainerBuilder $containerBuilder = null;
-
-    /**
-     * Application Directories
+     * Application core paths.
      *
      * @var array
      */
-    protected array $directories = [];
+    protected array $paths = [];
 
     /**
-     * Application Directories
+     * Create a new Citrus Application.
      *
-     * @var array
-     */
-    protected array $factories = [];
-
-    /**
-     * Application Services
-     *
-     * @var array
-     */
-    protected array $services = [];
-
-    /**
-     * Create a new Citrus Application
-     * 
-     * @param string $root The root application folder.
-     * @throws CitrusException The Application cannot be initialized twice.
-     * @throws CitrusException The passed root path does not exist.
+     * @param string $root
+     * @throws CitrusException The Citrus Application cannot be initialized twice.
+     * @throws CitrusException The passed root path '%s' does not exist or is not a folder.
      */
     public function __construct(string $root)
     {
-        if (self::$instance) {
-            throw new CitrusException('The Application cannot be initialized twice.');
+        if (isset(self::$instance)) {
+            throw new CitrusException('The Citrus Application cannot be initialized twice.');
         }
         self::$instance = $this;
 
-        if (($root = realpath($root)) === false) {
-            throw new CitrusException('The passed root path does not exist.');
+        if (($root = realpath($root)) === false || !is_dir($root)) {
+            throw new CitrusException("The passed root path '". func_get_arg(0) ."' does not exist or is not a folder.");
         }
-        $this->root = $root;
-        $this->startTime = floatval(microtime(true));
+        $this->root = $root;      
+        $this->startTime = floatval(microtime(true)); 
         $this->configurator = new Configurator;
-        $this->eventManager = new EventManager;
+        $this->container = new Container;
     }
 
     /**
@@ -158,6 +121,16 @@ class Application
     }
 
     /**
+     * Receive assigned Root path
+     *
+     * @return string
+     */
+    public function getRoot(): string
+    {
+        return $this->root;
+    }
+
+    /**
      * Receive Applcation Starttime
      *
      * @return float
@@ -178,14 +151,13 @@ class Application
     }
 
     /**
-     * Receive Application Event Manager
+     * Receive Applcation Container
      *
-     * @param string $class
-     * @return EventManager
+     * @return Container
      */
-    public function getEventManager(): EventManager
+    public function getContainer(): Container
     {
-        return $this->eventManager;
+        return $this->container;
     }
 
     /**
@@ -203,411 +175,366 @@ class Application
             $pathOrFile = $this->root . DIRECTORY_SEPARATOR . '.env';
         }
 
-        $this->configurator->setEnvironmentKey($envKey);
+        $this->configurator->setContextKey($envKey);
         $this->configurator->setEnvironmentData($_ENV);
         $this->configurator->setEnvironmentData($_SERVER);
-        $this->configurator->loadEnvironmentFile($pathOrFile, true);
+        
+        if (file_exists($pathOrFile)) {
+            $this->configurator->loadEnvironmentFile($pathOrFile, true);
+        }
+        
         $this->configurator->lockEnvironment();
     }
 
     /**
-     * The current Environment on which Citrus is currently running
+     * Get current Environment value.
      *
-     * @return string
+     * @param string $key
+     * @param mixed $default
+     * @return mixed
      */
-    public function getEnvironment(): string
+    public function getEnvironment(string $key, mixed $default = null): mixed
     {
-        return $this->configurator->getEnvironment('production');
+        return $this->configurator->getEnvironment($key, $default);
     }
 
     /**
-     * Check if the current environment is "Production".
+     * Get current Application Context.
+     *
+     * @param string $key
+     * @return string
+     */
+    public function getContext(): string
+    {
+        return strtolower($this->configurator->getEnvironment(
+            $this->configurator->getContextKey(), 'production'
+        ));
+    }
+
+    /**
+     * Check if the current application context is "Production".
      *
      * @return boolean
      */
     public function isProduction()
     {
-        $env = strtolower($this->getEnvironment());
-        return $env === 'production' || $env === 'prod';
+        $context = $this->getContext();
+        return $context === 'production' || $context === 'prod';
     }
 
     /**
-     * Check if the current environment is "Staging".
+     * Check if the current application context is "Staging".
      *
      * @return boolean
      */
     public function isStaging()
     {
-        $env = strtolower($this->getEnvironment());
-        return $env === 'staging' || $env === 'stage';
+        $context = $this->getContext();
+        return $context === 'staging' || $context === 'stage';
     }
 
     /**
-     * Check if the current environment is "Development".
+     * Check if the current application context is "Development".
      *
      * @return boolean
      */
     public function isDevelopment()
     {
-        $env = strtolower($this->getEnvironment());
-        return $env === 'development' || $env === 'dev';
+        $context = $this->getContext();
+        return $context === 'development' || $context === 'dev';
     }
 
     /**
-     * Set Application directory
+     * Load a configuration file
+     *
+     * @param string $path A directory path containing multiple configuration 
+     *               files or a single file/path.
+     * @param ?string $alias An optional alias, used only when the first param
+     *                is a direct filepath. 
+     * @return void
+     * @throws CitrusException The passed configuration (file-) path '%s' does not exist.
+     * @throws CitrusException The passed configuration file '%s' is not a valid JSON file. JSON Error: %s
+     */
+    public function loadConfiguration(string $path, ?string $alias = null): void
+    {
+        if (($path = realpath($path)) === false) {
+            throw new CitrusException("The passed configuration (file-) path '". func_get_arg(0) ."' does not exist.");
+        }
+
+        // Loop Directory
+        if (is_dir($path)) {
+            $handle = opendir($path);
+    
+            while (($file = readdir($handle)) !== false) {
+                if ($file === '.' || $file === '..') {
+                    continue;
+                }
+    
+                $filepath = $path . DIRECTORY_SEPARATOR . $file;
+                if (!is_file($filepath)) {
+                    continue;
+                }
+                
+                $ext = pathinfo($filepath, \PATHINFO_EXTENSION);
+                $alias = substr($file, 0, -(strlen($ext)+1));
+                $this->loadConfiguration($filepath);
+            }
+            closedir($handle);
+        }
+        
+        // Load Configuration File
+        if (is_file($path)) {
+            $ext = pathinfo($path, \PATHINFO_EXTENSION);
+
+            // Get Alias
+            if (empty($alias)) {
+                $alias = substr(basename($path), 0, -(strlen($ext)+1));
+            }
+
+            // Load Configuration depending on file extension
+            if ($ext === 'php') {
+                $this->configurator->setConfiguration(
+                    $alias, PHPParser::parseFile($path)
+                );
+            } else if ($ext === 'json') {
+                $this->configurator->setConfiguration(
+                    $alias, JSONParser::parseFile($path)
+                );
+            } else if ($ext === 'ini' || $ext === 'conf') {
+                $this->configurator->setConfiguration(
+                    $alias, INIParser::parseFile($path)
+                );
+            } else if ($ext === 'yaml') {
+                $this->configurator->setConfiguration(
+                    $alias, YAMLParser::parseFile($path)
+                );
+            }
+        }
+    }
+
+    /**
+     * Get current Configuration value.
+     *
+     * @param string $config
+     * @param mixed $default
+     * @return mixed
+     */
+    public function getConfiguration(string $config, mixed $default = null): mixed
+    {
+        return $this->configurator->getConfiguration($config, $default);
+    }
+
+    /**
+     * Set a core path.
      *
      * @param string $alias
      * @param string $path
      * @return void
-     * @throws CitrusException The passed path '%s' for the alias '%s' does not exist and could not be created.
      */
-    public function setDirectory(string $alias, string $path): void
+    public function setPath(string $alias, string $path): void
     {
-        if (strpos($path, '$') === 0) {
-            $path = $this->root . DIRECTORY_SEPARATOR . substr($path, 1);
+        if (array_key_exists($alias, $this->paths)) {
+            throw new CitrusException("The passed path alias '$alias' does already exist.");
         }
 
-        if (!file_exists($path)) {
-            if (@mkdir($path, 077, true) === false) {
-                throw new CitrusException("The passed path '$path' for the alias '$alias' does not exist and could not be created.");
+        if ($alias[0] !== ':') {
+            $alias = ':' . $alias;
+        }
+        $this->paths[$alias] = $this->resolvePath($path);
+    }
+
+    /**
+     * Set multiple core paths.
+     *
+     * @param array $paths
+     * @return void
+     */
+    public function setPaths(array $paths)
+    {
+        array_walk($paths, fn($path, $alias) => $this->setPath($alias, $path));
+    }
+
+    /**
+     * Resolve a filepath
+     *
+     * @param string ...$paths
+     * @return string
+     */
+    public function resolvePath(...$paths): string
+    {
+        if (empty($paths)) {
+            return $this->getRoot();
+        }
+        $DS = DIRECTORY_SEPARATOR;
+        $paths = array_map(fn($path) => str_replace(['/', '\\'], $DS, $path), $paths);
+
+        // Resolve Path
+        $path = array_shift($paths);
+
+        if ($path[0] === '$') {
+            $path = $this->getRoot() . substr($path, 1);
+        } else if ($path[0] === ':') {
+            $alias = ($index = strpos($path, $DS)) === false? $path: substr($path, 0, $index);
+            if(!array_key_exists($alias, $this->paths)) {
+                throw new CitrusException("The passed path alias '$alias' does not exist.");
             }
+            
+            $path = $this->paths[$alias] . ($index > 0? substr($path, $index+1): '');
         }
 
-        $this->directories[$alias] = $path;
+        return rtrim(str_replace($DS.$DS, $DS, $path . $DS . implode($DS, $paths)), $DS);
     }
 
     /**
-     * Set multiple Application directories
+     * Initialize Container
      *
-     * @param array $directores
      * @return void
      */
-    public function setDirectories(array $directores): void
+    public function loadContainer(): void
     {
-        array_walk($directores, fn($val, $key) => $this->setDirectory($key, $val));
+        $this->container->set(Application::class, $this);
+        $this->container->set(Configurator::class, $this->configurator);
+        $this->container->set(Router::class, Router::class);
+
+        $this->container->setAlias('app', Application::class);
+        $this->container->setAlias('citrus', Application::class);
+        $this->container->setAlias('config', Configurator::class);
     }
 
     /**
-     * Check if an directory alias has been defined
-     *
-     * @param string $alias 
-     * @return boolean
-     */
-    public function hasDirectory(string $alias): bool
-    {
-        return array_key_exists($alias, $this->directories);
-    }
-
-    /**
-     * Generate a Path within the Applcations root folder
-     *
-     * @param string[] ...$paths
-     * @return string
-     */
-    public function getRoot(...$paths): string
-    {
-        if (!empty($paths)) {
-            return $this->root . DIRECTORY_SEPARATOR . implode(DIRECTORY_SEPARATOR, $paths);
-        } else {
-            return $this->root;
-        }
-    }
-
-    /**
-     * Generate a Path within the Application folder
+     * Set single Factory.
      *
      * @param string $alias
-     * @param string[] ...$paths
-     * @return string
-     * @throws CitrusException The passed alias '%s' does not exist.
-     */
-    public function getPath(string $alias, ...$paths): string
-    {
-        if ($alias === '$') {
-            $alias = $this->root;
-        } else {
-            $alias = $this->directories[$alias] ?? null;
-        }
-
-        if (is_null($alias)) {
-            throw new CitrusException("The passed path alias '" . func_get_arg(0) . "' does not exist.");
-        }
-        
-
-        if (!empty($paths)) {
-            return $alias . DIRECTORY_SEPARATOR . implode(DIRECTORY_SEPARATOR, $paths);
-        } else {
-            return $alias;
-        }
-    }
-
-    /**
-     * Initialize the PHP-DI's Container Builder
-     *
-     * @return void
-     */
-    public function initContainer()
-    {
-        $builder = new \DI\ContainerBuilder();
-
-        // Register Core Definitions
-        $builder->addDefinitions([
-            \Citrus\Framework\Application::class    => $this,
-            \Citrus\Framework\Configurator::class   => $this->configurator,
-            \Citrus\Http\File::class                => \Citrus\Http\File::class,
-            \Citrus\Http\Request::class             => \Citrus\Http\Request::class,
-            \Citrus\Http\Response::class            => \Citrus\Http\Response::class,
-            \Citrus\Http\Stream::class              => \Citrus\Http\Stream::class,
-            \Citrus\Http\Uri::class                 => \Citrus\Http\Uri::class,
-            \Citrus\Router\Collector::class         => \Citrus\Router\Collector::class,
-            \Citrus\Router\Dispatcher::class        => \Citrus\Router\Dispatcher::class,
-            \Citrus\Router\Route::class             => \Citrus\Router\Route::class
-        ]);
-
-        // Enable Caching
-        if ($this->isProduction() && $this->hasDirectory('cache')) {
-            $builder->enableCompilation($this->getPath('cache'));
-            $builder->writeProxiesToFile(true, $this->getPath('cache', 'proxies'));
-        }
-
-        // Set Builder
-        $this->containerBuilder = $builder;
-    }
-
-    /**
-     * Build the current PHP-DI Container
-     *
-     * @return void
-     */
-    public function buildContainer(): void
-    {
-        $this->container = $this->containerBuilder->build();
-    }
-
-    /**
-     * Get the current PHP-DI Container when already build
-     *
-     * @return ?Container
-     */
-    public function getContainer(): ?Container
-    {
-        return $this->container ?? null;
-    }
-
-    /**
-     * Set a Runtime Service which does some cool things.
-     *
      * @param string $class
      * @return void
-     * @throws CitrusException The passed class '%s' does not implement the Runtime contract.
      */
-    public function useRuntimeService(string $class): void
+    public function setFactory(string $alias, string $class): void
     {
-        if (!in_array(RuntimeInterface::class, class_implements($class))) {
-            throw new CitrusException("The passed class '$class' does not implement the Runtime contract.");
-        }
-        $this->runtime = new $class($this);
-        $this->runtime->bootstrap();
+        $this->container->setFactory($alias, $class);
     }
 
     /**
-     * Receive the registered Runtime Service
-     *
-     * @param string $class
-     * @return ?RuntimeInterface
-     */
-    public function getRuntimeService(): ?RuntimeInterface
-    {
-        return $this->runtime;
-    }
-
-    /**
-     * Register Factory
-     *
-     * @param string $alias
-     * @param mixed $factory
-     * @return void
-     * @throws CitrusException The passed factory alias '%s' has already been registered.
-     */
-    public function registerFactory(string $alias, mixed $factory)
-    {
-        if (array_key_exists($alias, $this->services)) {
-            throw new CitrusException("The passed factory alias '$alias' has already been registered.");
-        }
-
-        $this->factories[$alias] = $factory;
-
-        if ($this->container) {
-            $this->container->set($alias, $factory);
-        } else {
-            $this->containerBuilder->addDefinitions([$alias => $factory]);
-        }
-    }
-
-    /**
-     * Register multiple Factories
+     * Set multiple Factories.
      *
      * @param array $factories
      * @return void
      */
-    public function registerFactories(array $factories)
+    public function setFactories(array $factories): void
     {
-        array_walk($factories, fn($val, $key) => $this->registerFactory($key, $val));
+        array_map(
+            fn($alias, $class) => $this->container->setFactory($alias, $class),
+            array_keys($factories),
+            array_values($factories)
+        );
     }
 
     /**
-     * Receive a registered factory.
+     * Set single Service Provider.
      *
      * @param string $alias
+     * @param string $class
      * @return void
      */
-    public function factory(string $alias)
+    public function setService(string $alias, string $class): void
     {
-        if ($this->container) {
-            return $this->container->get($alias);
-        } else {
-            return $this->factories[$alias] ?? null;
-        }
+        $this->container->setFactory($alias, $class);
     }
 
     /**
-     * Register Service
-     *
-     * @param string $alias
-     * @param mixed $service
-     * @return void
-     * @throws CitrusException The passed service alias '%s' has already been registered.
-     */
-    public function registerService(string $alias, mixed $service)
-    {
-        if (array_key_exists($alias, $this->services)) {
-            throw new CitrusException("The passed service alias '$alias' has already been registered.");
-        }
-
-        $this->servicesfactories[$alias] = $service;
-
-        if ($this->container) {
-            $this->container->set($alias, $service);
-        } else {
-            $this->containerBuilder->addDefinitions([$alias => $service]);
-        }
-    }
-
-    /**
-     * Register multiple Services
+     * Set multiple Service Providerss.
      *
      * @param array $services
      * @return void
      */
-    public function registerServices(array $services)
+    public function setServices(array $services): void
     {
-        array_walk($services, fn($val, $key) => $this->registerService($key, $val));
+        array_map(
+            fn($alias, $class) => $this->container->setService($alias, $class),
+            array_keys($services),
+            array_values($services)
+        );
     }
 
     /**
-     * Receive a registered service.
+     * Set multiple Service Providerss.
      *
      * @param string $alias
+     * @param string $target
      * @return void
      */
-    public function service(string $alias)
+    public function setAlias(string $alias, string $target): void
     {
-        if ($this->container) {
-            return $this->container->get($alias);
-        } else {
-            return $this->services[$alias] ?? null;
-        }
-    }
-
-
-
-
-
-
-
-    /**
-     * Load Configuration File
-     *
-     * @param string $path_or_file The path containing the configuration .php files or the single
-     *               filepath directly.
-     * @param string|null $alias An additional alias used for single filepaths or null to use the
-     *                    filename without extension itself.
-     * @return void
-     */
-    public function configure(string $path_or_file, ?string $alias = null): void
-    {
-        
+        $this->container->setAlias($alias, $target);
     }
 
     /**
-     * Call Function via Citrus
+     * Set multiple Service Providerss.
      *
-     * @param \Closure $func
+     * @param array $aliases
      * @return void
      */
-    public function callFunction(\Closure $func)
+    public function setAliases(array $aliases): void
     {
-        if ($this->container instanceof \Invoker\InvokerInterface) {
-            $this->container->call($func);
-        } else {
-            $reflection = new \ReflectionFunction($func);
-            var_dump('oh', strval($reflection->getParameters()[0]->getType()));
-        }
+        array_walk($aliases, fn($target, $alias) => $this->container->setAlias($alias, $target));
     }
 
     /**
-     * Finish the Citrus Runtime Setup
+     * Resolve a Class or Class alias.
      *
-     * @return void
+     * @param string $class
+     * @param array $args
+     * @return mixed
      */
-    public function finish()
+    public function make(string $class, array $args = []): mixed
     {
-        $this->eventManager->dispatch(new BeforeFinishEvent([$this]));
-        
-        if ($this->runtime) {
-            $this->runtime->beforeFinish();
-        }
-
-        if (!$this->container && $this->containerBuilder) {
-            $this->buildContainer();
-        }
-
-        if ($this->runtime) {
-            $this->runtime->afterFinish();
-        }
-
-        $this->eventManager->dispatch(new AfterFinishEvent([$this]));
+        return $this->container->make($class, $args);
     }
 
     /**
-     * Run the Application using / generating a ServerRequest.
+     * Resolve and Call a function.
      *
-     * @param ServerRequestInterface|null $request
+     * @param callable|\Closure $function
      * @return void
      */
-    public function run(?ServerRequestInterface $request = null)
+    public function call(callable | \Closure $function)
     {
-        if ($request === null) {
+        return $this->container->call($function);
+    }
+
+    /**
+     * Finalize Citrus Application
+     *
+     * @param string|null $class
+     * @return void
+     */
+    public function finalize(?string $class)
+    {
+        //setlocale()
+
+        $service = $this->container->make($class);
+        $service->finalize();
+    }
+
+    /**
+     * Run Application.
+     *
+     * @param ?Request $request
+     * @return void
+     */
+    public function run(?Request $request = null)
+    {
+        if (empty($request)) {
             $request = Request::createFromGlobals();
         }
 
-        if (!($request instanceof ServerRequestInterface)) {
-            throw new CitrusException('The run method cannot be executed using a non-server request.');
+        /** @var Router */
+        $router = $this->container->make(Router::class);
+
+        $response = $router->dispatch($request);
+        if (!($response instanceof Response)) {
+            throw new CitrusException("Received invalid response from route.");
         }
-
-        print('YaY in ' . (microtime(true) - $this->startTime) . ' seconds');
-    }
-
-    /**
-     * Run the Application using / generating a normal (CLI) Request.
-     *
-     * @param ServerRequestInterface|null $request
-     * @return void
-     */
-    public function execute($request = null)
-    {
-        $console = new Console();
-        $console->execute();
+        print($response);
     }
 
 }

@@ -2,7 +2,7 @@
 
 namespace Citrus\Utilities;
 
-class ArrayUtility
+class Arr
 {
 
     /**
@@ -40,6 +40,23 @@ class ArrayUtility
     {
         $values = array_map(fn($item) => is_array($item)? $item: [$item], $values);
         return array_merge($array, ...$values);
+    }
+
+    /**
+     * Find the first needle in the haystack.
+     *
+     * @param array $haystack
+     * @param array $needles
+     * @return ?mixed
+     */
+    static public function findFirst(array $haystack, array $needles): ?mixed
+    {
+        foreach ($haystack AS $value) {
+            if (in_array($value, $needles)) {
+                return $value;
+            }
+        }
+        return null;
     }
 
 }

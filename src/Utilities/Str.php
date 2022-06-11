@@ -2,7 +2,7 @@
 
 namespace Citrus\Utilities;
 
-class StringUtility
+class Str
 {
 
     /**

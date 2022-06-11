@@ -17,26 +17,17 @@
             "name": "rat.md",
             "email": "info@crate.md",
             "role": "Developer"
-        },
-        {
-            "name": "Artur Heinze",
-            "email": "artur@agentejo.com",
-            "role": "Developer"
         }
     ],
     "require": {
         "php": "^8.0.0",
         "ext-json": "*",
         "ext-mbstring": "*",
-        "php-di/php-di": "^6.4.0",
         "php-ds/php-ds": "^1.4",
-        "psr/cache": "^3.0.0",
-        "psr/container": "^1.0.0",
-        "psr/event-dispatcher": "^1.0.0",
-        "psr/http-message": "^1.0.1",
-        "psr/http-server-handler": "^1.0.1",
-        "psr/http-server-middleware": "^1.0.1",
-        "psr/log": "^3.0.0"
+        "symfony/yaml": "^6.0"
+    },
+    "require-dev": {
+        "symfony/var-dumper": "^6.0"
     },
     "suggest": {
         "ext-ds": "Increase performance by using the DS extension instead of the polyfill."

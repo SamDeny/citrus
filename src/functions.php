@@ -4,22 +4,24 @@ if (!function_exists('citrus')) {
     /**
      * Undocumented function
      *
-     * @param mixed $handler
      * @return mixed
      * @throws CitrusException Unknown usage of the citrus() function.
      */
-    function citrus(mixed $handler = null)
+    function citrus()
     {
-        if ($handler === null) {
+        if (func_num_args() === 0) {
             return \Citrus\Framework\Application::getInstance();
         }
 
-        if (is_string($handler)) {
-            return \Citrus\Framework\Application::getInstance()->getContainer()->get($handler);
-        }
+        $args = func_get_args();
+        $handler = array_shift($args);
 
+        if (is_string($handler)) {
+            return \Citrus\Framework\Application::getInstance()->make($handler, $args);
+        }
+        
         if ($handler instanceof \Closure) {
-            return \Citrus\Framework\Application::getInstance()->callFunction($handler);
+            return \Citrus\Framework\Application::getInstance()->call($handler);
         }
 
         throw new \Citrus\Exceptions\CitrusException('Unknown usage of the citrus() function.');
@@ -36,7 +38,7 @@ if (!function_exists('env')) {
      */
     function env(string $key, mixed $default = null)
     {
-        return \Citrus\Framework\Configurator::getInstance()->getEnvironmentData($key, $default);
+        return \Citrus\Framework\Configurator::getInstance()->getEnvironment($key, $default);
     }
 }
 
@@ -46,9 +48,9 @@ if (!function_exists('config')) {
      *
      * @param string $key
      * @param mixed $default
-     * @return void
+     * @return mixed
      */
-    function config(string $key, mixed $default = null)
+    function config(string $key, mixed $default = null): mixed
     {
         return \Citrus\Framework\Configurator::getInstance()->getConfiguration($key, $default);
     }
@@ -62,33 +64,8 @@ if (!function_exists('path')) {
      * @param string[] ...$paths
      * @return string
      */
-    function path(string $alias, ...$paths): string
+    function path(...$paths): string
     {
-        return \Citrus\Framework\Application::getInstance()->getPath($alias, ...$paths);
-    }
-}
-
-if (!function_exists('event')) {
-    /**
-     * Listen for or Dispatch an event.
-     *
-     * @param string|Event The event (class) name to listen for or the event 
-     *                     itself to dispatch.
-     * @param mixed The event listener / callback handler to be called, when the 
-     *              first value is the event (class) name.
-     * @param ?int An optional priority value for the event listener / callback
-     *             handler function. 
-     * @return mixed
-     */
-    function event()
-    {
-        $citrus = \Citrus\Framework\Application::getInstance();
-        $event = func_get_arg(0);
-
-        if ($event instanceof \Citrus\Events\Event) {
-            return $citrus->getEventManager()->dispatch($event);
-        } else {
-            return $citrus->getEventManager()->listen(...func_get_args());
-        }
+        return \Citrus\Framework\Application::getInstance()->resolvePath(...$paths);
     }
 }
