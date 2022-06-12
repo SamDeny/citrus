@@ -4,10 +4,10 @@ namespace Citrus\Console\Commands;
 
 use Citrus\Console\Console;
 use Citrus\Console\Writer;
-use Citrus\Contracts\CommandInterface;
+use Citrus\Contracts\CommandContract;
 use Citrus\Utilities\ArrayUtility;
 
-class HelpCommand implements CommandInterface
+class HelpCommand implements CommandContract
 {
 
     /**

@@ -2,11 +2,11 @@
 
 namespace Citrus\FileSystem\Parser;
 
-use Citrus\Contracts\ParserInterface;
+use Citrus\Contracts\ParserContract;
 use Citrus\Exceptions\ParserException;
 use Symfony\Component\Yaml\Yaml;
 
-class YAMLParser implements ParserInterface
+class YAMLParser implements ParserContract
 {
 
     /**

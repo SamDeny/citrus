@@ -2,7 +2,7 @@
 
 namespace Citrus\Contracts;
 
-interface MultitonInterface
+interface SingletonContract
 {
 
 }

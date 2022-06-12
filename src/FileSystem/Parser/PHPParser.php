@@ -2,10 +2,10 @@
 
 namespace Citrus\FileSystem\Parser;
 
-use Citrus\Contracts\ParserInterface;
+use Citrus\Contracts\ParserContract;
 use Citrus\Exceptions\ParserException;
 
-class PHPParser implements ParserInterface
+class PHPParser implements ParserContract
 {
 
     /**

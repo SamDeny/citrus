@@ -2,10 +2,10 @@
 
 namespace Citrus\Concerns;
 
+use Citrus\Contracts\MultitonContract;
 use Citrus\Framework\Application;
-use Citrus\Contracts\SingletonInterface;
 
-abstract class Service implements SingletonInterface
+abstract class FactoryConcern implements MultitonContract
 {  
 
     /**
@@ -22,17 +22,15 @@ abstract class Service implements SingletonInterface
      */
     public function __construct(Application $citrus)
     {
+        echo '-';
         $this->application = $citrus;
     }
 
     /**
-     * Bootstrap your Service Provider when initialized
+     * Make or Return the already instantiated class.
      *
-     * @return void
+     * @return mixed
      */
-    public function bootstrap()
-    {
-        // Nothing to do here.
-    }
+    abstract public function make(string $class, ...$arguments);
 
 }

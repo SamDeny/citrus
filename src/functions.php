@@ -69,3 +69,25 @@ if (!function_exists('path')) {
         return \Citrus\Framework\Application::getInstance()->resolvePath(...$paths);
     }
 }
+
+if (!function_exists('event')) {
+    /**
+     * Listen to or Trigger an Event
+     *
+     * @return mixed
+     */
+    function event()
+    {
+        if (func_num_args() === 0) {
+            return \Citrus\Framework\EventManager::getInstance();
+        } else if (func_num_args() >= 2 && $event = func_get_arg(0) && is_string($event)) {
+            if (is_a($event, \Citrus\Concerns\Event::class)) {
+                return \Citrus\Framework\EventManager::getInstance()->dispatch(...func_get_args());
+            } else {
+                return \Citrus\Framework\EventManager::getInstance()->addListener(...func_get_args());
+            }
+        } else {
+            throw new \Citrus\Exceptions\CitrusException('Unknown usage of the event() function.');
+        }
+    }
+}

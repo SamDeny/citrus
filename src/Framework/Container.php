@@ -2,9 +2,9 @@
 
 namespace Citrus\Framework;
 
-use Citrus\Concerns\Factory;
-use Citrus\Concerns\Service;
-use Citrus\Contracts\SingletonInterface;
+use Citrus\Concerns\FactoryConcern;
+use Citrus\Concerns\ServiceConcern;
+use Citrus\Contracts\SingletonContract;
 use Citrus\Exceptions\CitrusException;
 use Ds\Map;
 use Ds\Set;
@@ -74,7 +74,7 @@ class Container
      */
     public function setFactory(string $chain, string $class): void
     {
-        if (!is_a($class, Factory::class, true)) {
+        if (!is_a($class, FactoryConcern::class, true)) {
             throw new CitrusException("The passed factory class '$class' does not extend the Factory concern.");
         }
         $this->aliases->put($chain, $class);
@@ -90,7 +90,7 @@ class Container
      */
     public function setService(string $alias, string $class): void
     {
-        if (!is_a($class, Service::class, true)) {
+        if (!is_a($class, ServiceConcern::class, true)) {
             throw new CitrusException("The passed service provider '$class' does not extend the Service concern.");
         }
         $this->aliases->put($alias, $class);
@@ -151,7 +151,7 @@ class Container
             if (!$instance || is_string($instance)) {
                 $instance = $this->resolve($real);
 
-                if (in_array(SingletonInterface::class, class_implements($instance))) {
+                if (in_array(SingletonContract::class, class_implements($instance))) {
                     $this->storage->put($real, $instance);
                 }
             }

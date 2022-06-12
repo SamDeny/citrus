@@ -2,7 +2,7 @@
 
 namespace Citrus\Router;
 
-use Citrus\Contracts\SingletonInterface;
+use Citrus\Contracts\SingletonContract;
 use Citrus\Exceptions\RouterException;
 use Citrus\Http\Request;
 
@@ -11,7 +11,7 @@ use Citrus\Http\Request;
  * The Citrus Router system is based on the nikic/FastRoute package and has 
  * been directly integrated here, since FastRoute isn't active developed.
  */
-class Router implements SingletonInterface
+class Router implements SingletonContract
 {
 
     public const VARIABLE_REGEX = <<<'REGEX'
@@ -24,6 +24,39 @@ class Router implements SingletonInterface
 REGEX;
 
     public const DEFAULT_DISPATCH_REGEX = '[^/]+';
+
+    /**
+     * Controller interface definitions.
+     *
+     * @var array
+     */
+    static protected array $definitions = [];
+
+    /**
+     * Add a single Interface Controller definition.
+     *
+     * @param string $interface
+     * @param array $routes
+     * @return void
+     */
+    static public function addDefinition(string $interface, array $routes): void
+    {
+        self::$definitions[$interface] = $routes;
+    }
+
+    /**
+     * Add multiple interface controller definitions.
+     *
+     * @param array $definitions
+     * @return void
+     */
+    static public function addDefinitions(array $definitions): void
+    {
+        self::$definitions = array_merge(
+            self::$definitions,
+            $definitions
+        );
+    }
 
 
     /**
@@ -315,6 +348,32 @@ REGEX;
     }
 
     /**
+     * Add routes depending on the Controller.
+     *
+     * @param string $controller
+     * @return Router
+     */
+    public function ctrl(string $strict, string $controller): Router
+    {
+        foreach (class_implements($controller) AS $interface) {
+            if (!array_key_exists($interface, self::$definitions)) {
+                continue;
+            }
+            $definitions = self::$definitions[$interface];
+
+            foreach ($definitions AS $route) {
+                [$methods, $route, $action] = $route;
+                $this->route(
+                    $methods, 
+                    '/' . trim($strict, '/') . rtrim($route, '/'), 
+                    [$controller, $action]
+                );
+            }
+        }
+        return $this;
+    }
+
+    /**
      * Add a  new error handler.
      *
      * @param integer $error_code The desired error code.
@@ -348,7 +407,13 @@ REGEX;
         if (is_array($route)) {
 
         } else {
-            return call_user_func($route->handler(), $request, ...$route->params());
+            $handler = $route->handler();
+            if (is_array($handler)) {
+                $handler[0] = citrus()->make($handler[0]);
+                return call_user_func($handler, $request, ...$route->params());
+            } else {
+                return call_user_func($handler, $request, ...$route->params());
+            }
         }
     }
 

@@ -577,7 +577,7 @@ class Console
             $time = round(microtime(true) - citrus()->getStartTime(), 4);
             $writer->line("");
 
-            if (citrus()->getEnvironment() !== 'production') {
+            if (citrus()->getContext() !== 'production') {
                 $writer->line("");
                 $writer->line("");
                 $writer->line($writer->dim($writer->yellow('Command executed in ' . $time . ' seconds')));

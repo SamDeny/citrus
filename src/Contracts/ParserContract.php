@@ -2,7 +2,7 @@
 
 namespace Citrus\Contracts;
 
-interface ParserInterface
+interface ParserContract
 {
 
     /**

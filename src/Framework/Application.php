@@ -2,6 +2,9 @@
 
 namespace Citrus\Framework;
 
+use Citrus\Console\Console;
+use Citrus\Contracts\EventContract;
+use Citrus\Events\ApplicationEvent;
 use Citrus\Http\Request;
 use Citrus\Router\Router;
 use Citrus\Exceptions\CitrusException;
@@ -69,6 +72,13 @@ class Application
      */
     protected Container $container;
 
+    /**
+     * Application Event Manager
+     *
+     * @var EventManager
+     */
+    protected EventManager $eventManager;
+
 
     /**
      * Application core paths.
@@ -96,8 +106,9 @@ class Application
         }
         $this->root = $root;      
         $this->startTime = floatval(microtime(true)); 
-        $this->configurator = new Configurator;
-        $this->container = new Container;
+        $this->configurator = new Configurator($this);
+        $this->container = new Container($this);
+        $this->eventManager = new EventManager($this);
     }
 
     /**
@@ -161,7 +172,17 @@ class Application
     }
 
     /**
-     * Load DotEnv Environment
+     * Receive Applcation EventManager
+     *
+     * @return EventManager
+     */
+    public function getEventManager(): EventManager
+    {
+        return $this->eventManager;
+    }
+
+    /**
+     * Load Environment data.
      * 
      * @param ?string $pathOrFile The path containing the .env file(s), the 
      *                direct filepath or just null to use the root path.
@@ -379,7 +400,7 @@ class Application
                 throw new CitrusException("The passed path alias '$alias' does not exist.");
             }
             
-            $path = $this->paths[$alias] . ($index > 0? substr($path, $index+1): '');
+            $path = $this->paths[$alias] . ($index > 0? substr($path, $index): '');
         }
 
         return rtrim(str_replace($DS.$DS, $DS, $path . $DS . implode($DS, $paths)), $DS);
@@ -394,11 +415,15 @@ class Application
     {
         $this->container->set(Application::class, $this);
         $this->container->set(Configurator::class, $this->configurator);
+        $this->container->set(Container::class, $this->container);
+        $this->container->set(EventManager::class, $this->eventManager);
         $this->container->set(Router::class, Router::class);
 
         $this->container->setAlias('app', Application::class);
         $this->container->setAlias('citrus', Application::class);
         $this->container->setAlias('config', Configurator::class);
+        $this->container->setAlias('container', Container::class);
+        $this->container->setAlias('events', EventManager::class);
     }
 
     /**
@@ -491,7 +516,7 @@ class Application
     }
 
     /**
-     * Resolve and Call a function.
+     * Resolve and Call a function or Closure.
      *
      * @param callable|\Closure $function
      * @return void
@@ -502,17 +527,74 @@ class Application
     }
 
     /**
-     * Finalize Citrus Application
+     * Add a new Event Listener.
      *
-     * @param string|null $class
+     * @param string $event The desired event to listen for, or the event class.
+     * @param mixed $callback The desired callback function or closure, which 
+     *              should be dispatched for this event.
+     * @param integer $priority The desired priority of this event.
      * @return void
      */
-    public function finalize(?string $class)
+    public function addListener(string $event, mixed $callback, int $priority = 100): void
     {
-        //setlocale()
+        $this->eventManager->addListener($event, $callback, $priority);
+    }
 
-        $service = $this->container->make($class);
-        $service->finalize();
+    /**
+     * Dispatch an Event
+     *
+     * @param EventContract $event
+     * @return EventContract
+     */
+    public function dispatch(EventContract $event): EventContract
+    {
+        return $this->eventManager->dispatch($event);
+    }
+
+    /**
+     * Finalize Citrus Application
+     *
+     * @param string|null $runtime
+     * @return void
+     */
+    public function finalize(?string $runtime = null)
+    {
+        if (!empty($runtime)) {
+            $instance = $this->make($runtime);
+        }
+
+        // Set default timezone
+        //@todo
+        //date_default_timezone_set();
+
+        // Set Error reporting dependend on the environment
+        if ($this->isDevelopment()) {
+            error_reporting(-1);
+        } else if ($this->isStaging()) {
+            error_reporting(E_ERROR | E_WARNING | E_PARSE | E_NOTICE);
+        } else {
+            error_reporting(0);
+        }
+
+        // Dispatch Bootstrap Event
+        if ($instance && method_exists($instance, 'bootstrap')) {
+            $instance->bootstrap();
+        }
+
+        // Dispatch Bootstrap Event
+        $this->eventManager->dispatch(
+            new ApplicationEvent('bootstrap', [$this])
+        );
+
+        // Make Runtime Service
+        if ($instance && method_exists($instance, 'finalize')) {
+            $instance->finalize();
+        }
+
+        // Dispatch Finalize Event
+        $this->eventManager->dispatch(
+            new ApplicationEvent('finalize', [$this])
+        );
     }
 
     /**
@@ -535,6 +617,18 @@ class Application
             throw new CitrusException("Received invalid response from route.");
         }
         print($response);
+    }
+
+    /**
+     * Run the Application using / generating a normal (CLI) Request.
+     *
+     * @param ServerRequestInterface|null $request
+     * @return void
+     */
+    public function execute($request = null)
+    {
+        $console = new Console();
+        $console->execute();
     }
 
 }

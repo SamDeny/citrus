@@ -2,11 +2,43 @@
 
 namespace Citrus\Framework;
 
+use Citrus\Contracts\EventContract;
+use Citrus\Exceptions\CitrusException;
 use Ds\Map;
 use Ds\PriorityQueue;
+use Ds\Set;
 
 class EventManager
 {
+
+    /**
+     * Current EventManager instance.
+     *
+     * @var self|null
+     */
+    static protected ?self $instance = null;
+
+    /**
+     * Get current EventManager instance.
+     *
+     * @return self
+     * @throws CitrusException The EventManager has not been initialized yet.
+     */
+    static public function getInstance(): self
+    {
+        if (!self::$instance) {
+            throw new CitrusException('The EventManager has not been initialized yet.');
+        }
+        return self::$instance;
+    }
+
+    
+    /**
+     * Citrus Application
+     *
+     * @var Application
+     */
+    protected Application $app;
 
     /**
      * Event Listeners Map
@@ -16,53 +48,99 @@ class EventManager
     protected Map $listeners;
 
     /**
+     * Already called event types
+     *
+     * @var Set
+     */
+    protected Set $called;
+
+    /**
      * Create a new Event Manager
      */
-    public function __construct()
+    public function __construct(Application $citrus)
     {
+        $this->app = $citrus;
         $this->listeners = new Map();
+        $this->called = new Set();
     }
 
     /**
-     * Listen for a specific Event
+     * Add a new Event Listener.
      *
-     * @param string $event
-     * @param mixed $callback
-     * @param integer $priority
+     * @param string $event The desired event to listen for, or the event class.
+     * @param mixed $callback The desired callback function or closure, which 
+     *              should be dispatched for this event.
+     * @param integer $priority The desired priority of this event.
      * @return void
      */
-    public function listen(string $event, mixed $callback, int $priority = 100)
+    public function addListener(string $event, mixed $callback, int $priority = 100): void
     {
         if (!$this->listeners->hasKey($event)) {
             $this->listeners->put($event, new PriorityQueue);
         }
-        $this->listeners->get($event)->push($callback, $priority);
+        $this->listeners[$event]->push($callback, $priority);
     }
 
     /**
-     * Get Listeners for a specific Event
+     * Get Event Listeners based on the passed class.
      *
-     * @param object $event
-     * @return iterable
+     * @param EventContract $class
+     * @return array
      */
-    public function getListenersForEvent(object $event): iterable
+    public function getListeners(EventContract $event): array
     {
-        return $this->listeners->get($event::class, []);
-    }
+        $type = $event->getType();
+        $result = [];
 
-    /**
-     * Dispatch a specific Event
-     *
-     * @param object $event
-     * @return void
-     */
-    public function dispatch(object $event)
-    {
-        $listeners = $this->getListenersForEvent($event);
-
-        foreach ($listeners AS $listen) {
-            call_user_func($listen, $event);
+        // Get main Listeners
+        if ($this->listeners->hasKey($type)) {
+            $result = $this->listeners[$type]->toArray();
         }
+
+        // Get Parent Listeners (NamespaceOrder)
+        if (($index = strpos('@', $type)) !== false) {
+            $type = substr($type, 0, $index);
+
+            if ($this->listeners->hasKey($type)) {
+                $result = array_merge($result, $this->listeners[$type]->toArray());
+            }
+        }
+
+        // Return Listeners
+        return $result;
+    }
+
+    /**
+     * Dispatch an Event
+     *
+     * @param EventContract $event
+     * @return EventContract
+     */
+    public function dispatch(EventContract $event): EventContract
+    {
+        $listeners = $this->getListeners($event);
+        if (empty($listeners)) {
+            return $event;
+        }
+        
+        $orders = class_uses($event);
+        if (in_array(UniqueOrder::class, $orders)) {
+            if ($this->called->contains($event->getType())) {
+                throw new CitrusException("The passed event type '". $event->getType() ."' cannot be called twice.");
+            }
+            $this->called->add($event->getType());
+        }
+
+        foreach ($listeners AS $listener) {
+            $this->app->call($listener, $event);
+
+            // CancelableOrder
+            if (in_array(CancelableOrder::class, $orders) && $this->event->hasStopped()) {
+                break;
+            }
+        }
+
+        return $event;
     }
 
 }

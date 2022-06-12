@@ -2,10 +2,10 @@
 
 namespace Citrus\FileSystem\Parser;
 
-use Citrus\Contracts\ParserInterface;
+use Citrus\Contracts\ParserContract;
 use Citrus\Exceptions\ParserException;
 
-class JSONParser implements ParserInterface
+class JSONParser implements ParserContract
 {
 
     /**

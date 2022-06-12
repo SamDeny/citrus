@@ -183,9 +183,9 @@ class Route
     /**
      * Get Route Handler
      *
-     * @return callable
+     * @return mixed
      */
-    public function handler(): callable
+    public function handler(): mixed
     {
         return $this->handler;
     }

@@ -41,7 +41,7 @@ class Generator
 
         foreach ($regexToRoutesMap as $regex => $route) {
             $regexes[] = $regex . '(*MARK:' . $markName . ')';
-            $routeMap[$markName] = [$route->handler, $route->variables];
+            $routeMap[$markName] = [$route->handler(), $route->params()];
 
             ++$markName;
         }
@@ -151,7 +151,7 @@ class Generator
                     throw new RouterException(sprintf(
                         'Static route "%s" is shadowed by previously defined variable route "%s" for method "%s"',
                         $routeStr,
-                        $route->regex,
+                        $route->regex(),
                         $httpMethod
                     ));
                 }
