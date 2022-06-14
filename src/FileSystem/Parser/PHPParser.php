@@ -71,13 +71,6 @@ class PHPParser implements ParserContract
             }
         }
 
-        // Check within root
-        if (($attrbiutes['skip-root'] ?? false) !== true) {
-            if (strpos($filepath, citrus()->getRoot()) !== 0) {
-                throw new ParserException('The passed filepath is outside of citrus\' root directory.');
-            }
-        }
-
         // Include File
         try {
             $content = include $filepath;
@@ -122,7 +115,7 @@ class PHPParser implements ParserContract
      * @param array $attributes Additional attributes for the Parser engine.
      * @return null|string
      */
-    static public function emit(mixed $content, array $attributes = [])
+    static public function emit(mixed $content, array $attributes = []): ?string
     {
         if (!is_iterable($content) || empty($content)) {
             return null;
@@ -143,7 +136,7 @@ class PHPParser implements ParserContract
      * @param array $attributes Additional attributes for the Parser engine.
      * @return boolean
      */
-    static public function emitFile(mixed $content, string $filepath, array $attributes = [])
+    static public function emitFile(mixed $content, string $filepath, array $attributes = []): bool
     {
         if (!is_iterable($content) || empty($content)) {
             return false;

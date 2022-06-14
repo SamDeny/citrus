@@ -146,12 +146,12 @@ class Generator
         }
 
         if (isset($this->methodToRegexToRoutesMap[$httpMethod])) {
-            foreach ($this->methodToRegexToRoutesMap[$httpMethod] as $route) {
-                if ($route->matches($routeStr)) {
+            foreach ($this->methodToRegexToRoutesMap[$httpMethod] as $temp) {
+                if ($temp->matches($routeStr)) {
                     throw new RouterException(sprintf(
                         'Static route "%s" is shadowed by previously defined variable route "%s" for method "%s"',
                         $routeStr,
-                        $route->regex(),
+                        $temp->regex(),
                         $httpMethod
                     ));
                 }

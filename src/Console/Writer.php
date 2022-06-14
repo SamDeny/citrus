@@ -51,6 +51,38 @@ class Writer
     }
 
     /**
+     * Print a question and ask for input.
+     *
+     * @param string $question
+     * @param bool $hideInput
+     * @return string
+     */
+    public function input(string $question = '', bool $hideInput = false): string
+    {
+        if (!empty($question) && $question[strlen($question)-1] !== ' ') {
+            $question .= ' ';
+        }
+
+
+        //@todo find a Windows / stty-less solution, which does not require 
+        // using a different language (VBScript) or PowerShell or an executable 
+        // file... or any kind of hacks.
+        if ($hideInput) {
+            if (!empty($question)) {
+                print($question);
+            }
+            
+            system('stty -echo');
+            $answer = trim(fgets(STDIN));
+            system('stty echo');
+
+            return $answer;
+        } else {
+            return readline($question);
+        }
+    }
+
+    /**
      * Execute console command and print output
      *
      * @param string $command
@@ -94,6 +126,66 @@ class Writer
             $output .= $this->apply($value, $valRules);
             $this->line($output);
         }
+    }
+
+    /**
+     * Write Table
+     *
+     * @param array $headers
+     * @param array $rows
+     * @return void
+     */
+    public function table(array $headers, array $rows, array $alignments = [])
+    {
+        $cells = [];
+        $lines = [];
+        $align = [
+            'left'      => \STR_PAD_RIGHT,  // Spacing right -> text left
+            'right'     => \STR_PAD_LEFT,   // Spacing left  -> text right
+            'center'    => \STR_PAD_BOTH,
+            'both'      => \STR_PAD_BOTH,
+        ];
+
+        // STRval
+        $headers = array_map('strval', $headers);
+        array_walk_recursive($rows, fn(&$val) => $val = strval($val));
+
+        // Calculate Cell lengths
+        foreach ($headers AS $i => $head) {
+            $cells[$i] = strlen($head);
+        }
+
+        foreach ($rows AS $row) {
+            foreach ($row AS $i => $cell) {
+                if ($i > count($cells)-1) {
+                    $cells[$i] = 0;
+                }
+                $cells[$i] = strlen($cell) > $cells[$i]? strlen($cell): $cells[$i];
+            }
+        }
+
+        // Print Table Header
+        $header = '';
+        $separator = '';
+        foreach ($cells AS $i => $length) {
+            $header .= ($i == 0? '| ': '') . str_pad($headers[$i] ?? '', $length, ' ') . ' | ';
+            $separator .= ($i == 0? '| ': '') . str_pad('', $length, '-') . ' | ';
+        }
+        $lines[] = $header;
+        $lines[] = $separator;
+
+        // Print Table Rows
+        foreach ($rows AS $row) {
+            $line = '';
+            foreach ($cells AS $i => $length) {
+                $alignment = $alignments[$i] ?? 'left';
+                $line .= ($i == 0? '| ': '') . str_pad($row[$i] ?? '', $length, ' ', $align[$alignment]) . ' | ';
+            }
+            $lines[] = $line;
+        }
+
+
+        $this->lines($lines);
     }
 
     /**

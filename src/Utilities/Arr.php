@@ -47,9 +47,9 @@ class Arr
      *
      * @param array $haystack
      * @param array $needles
-     * @return ?mixed
+     * @return mixed
      */
-    static public function findFirst(array $haystack, array $needles): ?mixed
+    static public function findFirst(array $haystack, array $needles): mixed
     {
         foreach ($haystack AS $value) {
             if (in_array($value, $needles)) {

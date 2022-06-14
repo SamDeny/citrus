@@ -2,7 +2,7 @@
 
 namespace Citrus\Exceptions;
 
-class UnmetConcernException extends RuntimeException
+class RuntimeException extends \Exception
 {
 
 }

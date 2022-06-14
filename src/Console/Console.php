@@ -5,7 +5,9 @@ namespace Citrus\Console;
 use Citrus\Console\Commands\AboutCommand;
 use Citrus\Console\Commands\HelpCommand;
 use Citrus\Contracts\Command;
+use Citrus\Contracts\CommandContract;
 use Citrus\Exceptions\CitrusException;
+use Citrus\Exceptions\UnmetContractException;
 
 /**
  * The Citrus Console class provides a simple interface to extend Citrus CLI 
@@ -104,27 +106,24 @@ class Console
      * @throws CitrusException The passed namespace for the command '%s' cannot be used.
      * @throws CitrusException The passed command class '%s' does not extend the Command interface.
      */
-    static public function registerCommand(string $command, string $class): void
+    static public function registerCommands(string $class): void
     {
-        if (array_key_exists($command, self::$commands)) {
-            throw new CitrusException("The passed command '$command' has already been registered.");
+        if (!in_array(CommandContract::class, class_implements($class))) {
+            throw new UnmetContractException("The passed command class '$class' does not extend the CommandContract.");
         }
 
-        if (strpos($command, ':') === false) {
-            throw new CitrusException("The passed command '$command' does not define a namspace.");
+        $commands = $class::describe();
+        if (empty($commands)) {
+            throw new CitrusException("The passed command class '$class' does not declare any commands.");
         }
 
-        if (str_starts_with($command, 'citrus:')) {
-            throw new CitrusException("The passed namespace for the command '$command' cannot be used.");
+        foreach ($commands AS $key => $value) {
+            if (str_starts_with($key, 'citrus:')) {
+                throw new CitrusException("The passed namespace for the command '$key' cannot be used.");
+            }
+
+            self::$commands[$key] = $class;
         }
-
-        $interfaces = class_implements($class);
-
-        if (!in_array(Command::class, $interfaces)) {
-            throw new CitrusException("The passed command class '$class' does not extend the Command interface.");
-        }
-
-        self::$commands[$command] = $class;
     }
 
     /**

@@ -4,6 +4,7 @@ namespace Citrus\Framework;
 
 use Citrus\Contracts\EventContract;
 use Citrus\Exceptions\CitrusException;
+use Closure;
 use Ds\Map;
 use Ds\PriorityQueue;
 use Ds\Set;
@@ -56,6 +57,8 @@ class EventManager
 
     /**
      * Create a new Event Manager
+     * 
+     * @param Application $citrus
      */
     public function __construct(Application $citrus)
     {
@@ -132,7 +135,11 @@ class EventManager
         }
 
         foreach ($listeners AS $listener) {
-            $this->app->call($listener, $event);
+            if (is_a($listener, Closure::class)) {
+                $this->app->call($listener, $event);
+            } else {
+                call_user_func($listener, $event);
+            }
 
             // CancelableOrder
             if (in_array(CancelableOrder::class, $orders) && $this->event->hasStopped()) {

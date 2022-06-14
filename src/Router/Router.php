@@ -109,6 +109,10 @@ REGEX;
             $methods = [$methods];
         }
 
+        if (isset($this->shared['prefix'])) {
+            $routepath = $this->shared['prefix'] . rtrim($routepath, '/');
+        }
+
         $details = $this->parse($routepath);
         $route = new Route($methods, $routepath, $handler, $details);
         foreach ($route->methods() as $method) {
@@ -401,7 +405,7 @@ REGEX;
 
         $route = $this->dispatcher->dispatch(
             $request->method(),
-            $request->target()
+            rtrim($request->target(), '/')
         );
 
         if (is_array($route)) {

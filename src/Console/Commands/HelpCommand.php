@@ -5,7 +5,7 @@ namespace Citrus\Console\Commands;
 use Citrus\Console\Console;
 use Citrus\Console\Writer;
 use Citrus\Contracts\CommandContract;
-use Citrus\Utilities\ArrayUtility;
+use Citrus\Utilities\Arr;
 
 class HelpCommand implements CommandContract
 {
@@ -203,10 +203,11 @@ class HelpCommand implements CommandContract
         } else {
             $this->writer->line($this->writer->yellow('Available Commands'));
         }
+        $this->writer->line();
+        
         foreach ($lists AS $namespace => $list) {
             ksort($list);
 
-            $this->writer->line();
             $this->writer->line($this->writer->yellow($namespace));
             $this->writer->list($list, $length, 4, 4, "", "\x1b[2m");
         }
@@ -368,7 +369,7 @@ class HelpCommand implements CommandContract
             }
 
             // Assign Default Short Key
-            if (($arg['short'] ?? '') === '') {
+            if (($arg['short'] ?? '') === '' && isset($arg['default'])) {
                 $hasDefault = $key;
                 $parameterList[] = [
                     'keys'  => ["[$key]"],
@@ -381,10 +382,10 @@ class HelpCommand implements CommandContract
 
             // Prepare Parameters List Data
             $keys = [
-                "--{$key}" . (($type === 'string' || $type === 'array')? " [$key]": '')
+                "--{$key}" . (in_array($type, ['string', 'array'])? " [$key]": '')
             ];
             if (!empty($short)) {
-                $keys[] = "-{$short}" . (($type === 'string' || $type === 'array')? " [$key]": '');
+                $keys[] = "-{$short}" . (in_array($type, ['string', 'array'])? " [$key]": '');
             }
             $parameterList[] = [
                 'keys'  => $keys,
@@ -413,7 +414,7 @@ class HelpCommand implements CommandContract
         $this->writer->line();
         $this->writer->line($this->writer->yellow('Possible Parameters'));
 
-        $maxLength = max(array_map('strlen', ArrayUtility::flat(array_column($parameterList, 'keys'))));
+        $maxLength = max(array_map('strlen', Arr::flat(array_column($parameterList, 'keys'))));
 
         $count = 0;
         foreach ($parameterList AS $param) {

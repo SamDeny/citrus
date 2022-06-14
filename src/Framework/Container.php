@@ -60,13 +60,13 @@ class Container
      * @param mixed $object The desired object / value to set.
      * @return void
      */
-    public function set(string $alias, mixed $object)
+    public function set(string $alias, mixed $object): void
     {
         $this->storage->put($alias, $object);
     }
 
     /**
-     * Set Application Factory.
+     * Set single Application Factory.
      *
      * @param string $chain
      * @param string $class
@@ -82,7 +82,18 @@ class Container
     }
 
     /**
-     * Set Application Service Provider.
+     * Set multiple Application Factories.
+     *
+     * @param array $factories
+     * @return void
+     */
+    public function setFactories(array $factories): void
+    {
+        array_walk($factories, fn($class, $chain) => $this->setFactory($chain, $class));
+    }
+
+    /**
+     * Set single Application Service Provider.
      *
      * @param string $alias
      * @param string $class
@@ -93,12 +104,24 @@ class Container
         if (!is_a($class, ServiceConcern::class, true)) {
             throw new CitrusException("The passed service provider '$class' does not extend the Service concern.");
         }
+
         $this->aliases->put($alias, $class);
         $this->services->add($class);
     }
 
     /**
-     * Set Container Alias.
+     * Set multiple Application Services.
+     *
+     * @param array $services
+     * @return void
+     */
+    public function setServices(array $services): void
+    {
+        array_walk($services, fn($class, $alias) => $this->setService($alias, $class));
+    }
+
+    /**
+     * Set single Application Container Alias.
      *
      * @param string $alias
      * @param string $target
@@ -107,6 +130,17 @@ class Container
     public function setAlias(string $alias, string $target): void
     {
         $this->aliases->put($alias, $target);
+    }
+
+    /**
+     * Set multiple Application Container Aliases.
+     *
+     * @param array $aliases
+     * @return void
+     */
+    public function setAliases(array $aliases): void
+    {
+        array_walk($aliases, fn($target, $alias) => $this->setAlias($alias, $target));
     }
 
     /**
@@ -142,14 +176,14 @@ class Container
             return $instance->make($class, ...$args);
         } else if ($this->services->contains($real)) {
             if (!isset($instance)) {
-                $instance = $this->resolve($real);
+                $instance = $this->resolve($real, $args);
                 $instance->bootstrap();
                 $this->storage->put($real, $instance);
             }
             return $instance;
         } else {
             if (!$instance || is_string($instance)) {
-                $instance = $this->resolve($real);
+                $instance = $this->resolve($real, $args);
 
                 if (in_array(SingletonContract::class, class_implements($instance))) {
                     $this->storage->put($real, $instance);
@@ -165,7 +199,7 @@ class Container
      * @param callable|\Closure $function
      * @return void
      */
-    public function call(callable | \Closure $function)
+    public function call(callable | \Closure $function): mixed
     {
         $args = [];
         $reflect = new ReflectionFunction($function);
@@ -176,7 +210,7 @@ class Container
             $args[] = $this->make($class);
         }
 
-        call_user_func_array($function, $args);
+        return call_user_func_array($function, $args);
     }
 
     /**
@@ -185,7 +219,7 @@ class Container
      * @param string $class
      * @return mixed
      */
-    public function resolve(string $class): mixed
+    public function resolve(string $class, array $args = []): mixed
     {
         $ref = new ReflectionClass($class);
         $params = [];
@@ -194,12 +228,17 @@ class Container
         $constructor = $ref->getConstructor();
         if ($constructor) {
             foreach ($constructor->getParameters() AS $arg) {
-                $params[] = $this->make($arg->getType()->getName());
+                $type = $arg->getType()->getName();
+                if (class_exists($type)) {
+                    $params[] = $this->make($type);
+                } else {
+                    break;
+                }
             }
         }
 
         // Return Instance
-        return new $class(...$params);
+        return new $class(...[...$params, ...$args]);
     }
 
 }

@@ -46,7 +46,7 @@ interface ParserContract
      * @param array $attributes Additional attributes for the Parser engine.
      * @return null|string
      */
-    static public function emit(mixed $content, array $attributes = []);
+    static public function emit(mixed $content, array $attributes = []): ?string;
 
     /**
      * Send the respective representation to the passed filepath, and return 
@@ -57,6 +57,6 @@ interface ParserContract
      * @param array $attributes Additional attributes for the Parser engine.
      * @return boolean
      */
-    static public function emitFile(mixed $content, string $filepath, array $attributes = []);
+    static public function emitFile(mixed $content, string $filepath, array $attributes = []): bool;
 
 }

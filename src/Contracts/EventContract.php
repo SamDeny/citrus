@@ -13,6 +13,13 @@ interface EventContract
     public function getType(): string;
 
     /**
+     * Get specific passed or filtered Arguments.
+     *
+     * @return mixed
+     */
+    public function getArgument(int $num): mixed;
+
+    /**
      * Get passed or filtered Arguments.
      *
      * @return array

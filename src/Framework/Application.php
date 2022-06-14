@@ -5,15 +5,31 @@ namespace Citrus\Framework;
 use Citrus\Console\Console;
 use Citrus\Contracts\EventContract;
 use Citrus\Events\ApplicationEvent;
+use Citrus\Events\RequestEvent;
 use Citrus\Http\Request;
 use Citrus\Router\Router;
 use Citrus\Exceptions\CitrusException;
-use Citrus\FileSystem\Parser\INIParser;
-use Citrus\FileSystem\Parser\JSONParser;
-use Citrus\FileSystem\Parser\PHPParser;
-use Citrus\FileSystem\Parser\YAMLParser;
 use Citrus\Http\Response;
 
+/**
+ * @method mixed getEnvironment(string $key, mixed $default = null)
+ * @method string getContext()
+ * @method bool isProduction()
+ * @method bool isStaging()
+ * @method bool isDevelopment()
+ * @method mixed getConfiguration(string $key, mixed $default = null)
+ * @method void set(string $alias, mixed $object)
+ * @method void setFactory(string $chain, string $class)
+ * @method void setFactories(array $factories)
+ * @method void setService(string $alias, string $class)
+ * @method void setServices(array $services)
+ * @method void setAlias(string $alias, string $target)
+ * @method void setAliases(array $aliases)
+ * @method mixed make(string $class, array $args = [])
+ * @method mixed call(mixed $function)
+ * @method void addListener(string $event, mixed $callback, int $priority = 100)
+ * @method EventContract dispatch(EventContract $event)
+ */
 class Application
 {
 
@@ -33,12 +49,12 @@ class Application
      * Get Citrus Application instance
      *
      * @return Application
-     * @throws CitrusException The Citrus Application has not been initialized yet.
+     * @throws CitrusException The Citrus application has not been initialized yet.
      */
     static public function getInstance(): Application
     {
         if (!self::$instance) {
-            throw new CitrusException('The Citrus Application has not been initialized yet.');
+            throw new CitrusException('The Citrus application has not been initialized yet.');
         }
         return self::$instance;
     }
@@ -79,7 +95,6 @@ class Application
      */
     protected EventManager $eventManager;
 
-
     /**
      * Application core paths.
      *
@@ -104,11 +119,50 @@ class Application
         if (($root = realpath($root)) === false || !is_dir($root)) {
             throw new CitrusException("The passed root path '". func_get_arg(0) ."' does not exist or is not a folder.");
         }
+
         $this->root = $root;      
         $this->startTime = floatval(microtime(true)); 
+
         $this->configurator = new Configurator($this);
         $this->container = new Container($this);
         $this->eventManager = new EventManager($this);
+    }
+
+    /**
+     * Get chained core classes.
+     *
+     * @param string $name
+     * @return void
+     * @throws InvalidArgumentException The passed class proeprty '%s' dies not exist.
+     */
+    public function __get(string $name)
+    {
+        if (property_exists($this, $name)) {
+            return $this->$name;
+        } else {
+            throw new \InvalidArgumentException("The passed class proeprty '$name' dies not exist.");
+        }
+    }
+
+    /**
+     * Call methods for the chained core classes.
+     *
+     * @param string $name
+     * @param array $arguments
+     * @return mixed
+     * @throws BadMethodCallException The passed Application method '%s' does not exist.
+     */
+    public function __call(string $method, array $arguments = [])
+    {
+        if (method_exists($this->configurator, $method)) {
+            return $this->configurator->{$method}(...$arguments);
+        } else if (method_exists($this->container, $method)) {
+            return $this->container->{$method}(...$arguments);
+        } else if (method_exists($this->eventManager, $method)) {
+            return $this->eventManager->{$method}(...$arguments);
+        } else {
+            throw new \BadMethodCallException("The passed Application method '$method' does not exist.");
+        }
     }
 
     /**
@@ -152,7 +206,7 @@ class Application
     }
 
     /**
-     * Receive Applcation Configurator
+     * Receive Application Configurator
      *
      * @return Configurator
      */
@@ -162,7 +216,7 @@ class Application
     }
 
     /**
-     * Receive Applcation Container
+     * Receive Application Container
      *
      * @return Container
      */
@@ -172,7 +226,7 @@ class Application
     }
 
     /**
-     * Receive Applcation EventManager
+     * Receive Application EventManager
      *
      * @return EventManager
      */
@@ -208,64 +262,6 @@ class Application
     }
 
     /**
-     * Get current Environment value.
-     *
-     * @param string $key
-     * @param mixed $default
-     * @return mixed
-     */
-    public function getEnvironment(string $key, mixed $default = null): mixed
-    {
-        return $this->configurator->getEnvironment($key, $default);
-    }
-
-    /**
-     * Get current Application Context.
-     *
-     * @param string $key
-     * @return string
-     */
-    public function getContext(): string
-    {
-        return strtolower($this->configurator->getEnvironment(
-            $this->configurator->getContextKey(), 'production'
-        ));
-    }
-
-    /**
-     * Check if the current application context is "Production".
-     *
-     * @return boolean
-     */
-    public function isProduction()
-    {
-        $context = $this->getContext();
-        return $context === 'production' || $context === 'prod';
-    }
-
-    /**
-     * Check if the current application context is "Staging".
-     *
-     * @return boolean
-     */
-    public function isStaging()
-    {
-        $context = $this->getContext();
-        return $context === 'staging' || $context === 'stage';
-    }
-
-    /**
-     * Check if the current application context is "Development".
-     *
-     * @return boolean
-     */
-    public function isDevelopment()
-    {
-        $context = $this->getContext();
-        return $context === 'development' || $context === 'dev';
-    }
-
-    /**
      * Load a configuration file
      *
      * @param string $path A directory path containing multiple configuration 
@@ -278,9 +274,10 @@ class Application
      */
     public function loadConfiguration(string $path, ?string $alias = null): void
     {
-        if (($path = realpath($path)) === false) {
-            throw new CitrusException("The passed configuration (file-) path '". func_get_arg(0) ."' does not exist.");
+        if (($realPath = realpath($path)) === false) {
+            throw new CitrusException("The passed configuration (file-) path '$path' does not exist.");
         }
+        $path = $realPath;
 
         // Loop Directory
         if (is_dir($path)) {
@@ -312,37 +309,12 @@ class Application
                 $alias = substr(basename($path), 0, -(strlen($ext)+1));
             }
 
-            // Load Configuration depending on file extension
-            if ($ext === 'php') {
-                $this->configurator->setConfiguration(
-                    $alias, PHPParser::parseFile($path)
-                );
-            } else if ($ext === 'json') {
-                $this->configurator->setConfiguration(
-                    $alias, JSONParser::parseFile($path)
-                );
-            } else if ($ext === 'ini' || $ext === 'conf') {
-                $this->configurator->setConfiguration(
-                    $alias, INIParser::parseFile($path)
-                );
-            } else if ($ext === 'yaml') {
-                $this->configurator->setConfiguration(
-                    $alias, YAMLParser::parseFile($path)
-                );
-            }
+            // Set Configuration
+            $this->configurator->setConfiguration(
+                $alias,
+                $this->configurator->parseConfiguration($path, $ext === 'conf'? 'ini': $ext)
+            );
         }
-    }
-
-    /**
-     * Get current Configuration value.
-     *
-     * @param string $config
-     * @param mixed $default
-     * @return mixed
-     */
-    public function getConfiguration(string $config, mixed $default = null): mixed
-    {
-        return $this->configurator->getConfiguration($config, $default);
     }
 
     /**
@@ -373,6 +345,27 @@ class Application
     public function setPaths(array $paths)
     {
         array_walk($paths, fn($path, $alias) => $this->setPath($alias, $path));
+    }
+
+    /**
+     * Check if a path identifier exists
+     *
+     * @param string $identifier
+     * @return bool
+     */
+    public function hasPath(string $identifier): bool
+    {
+        return isset($this->paths[$identifier]);
+    }
+
+    /**
+     * Get all Path identifiers
+     *
+     * @return array
+     */
+    public function getPaths(): array
+    {
+        return $this->paths;
     }
 
     /**
@@ -427,128 +420,16 @@ class Application
     }
 
     /**
-     * Set single Factory.
-     *
-     * @param string $alias
-     * @param string $class
+     * Load Bootstrap Hook
+     * 
+     * @param string The desired file to inject.
      * @return void
      */
-    public function setFactory(string $alias, string $class): void
+    public function loadBootstrap(string $filepath)
     {
-        $this->container->setFactory($alias, $class);
-    }
-
-    /**
-     * Set multiple Factories.
-     *
-     * @param array $factories
-     * @return void
-     */
-    public function setFactories(array $factories): void
-    {
-        array_map(
-            fn($alias, $class) => $this->container->setFactory($alias, $class),
-            array_keys($factories),
-            array_values($factories)
-        );
-    }
-
-    /**
-     * Set single Service Provider.
-     *
-     * @param string $alias
-     * @param string $class
-     * @return void
-     */
-    public function setService(string $alias, string $class): void
-    {
-        $this->container->setFactory($alias, $class);
-    }
-
-    /**
-     * Set multiple Service Providerss.
-     *
-     * @param array $services
-     * @return void
-     */
-    public function setServices(array $services): void
-    {
-        array_map(
-            fn($alias, $class) => $this->container->setService($alias, $class),
-            array_keys($services),
-            array_values($services)
-        );
-    }
-
-    /**
-     * Set multiple Service Providerss.
-     *
-     * @param string $alias
-     * @param string $target
-     * @return void
-     */
-    public function setAlias(string $alias, string $target): void
-    {
-        $this->container->setAlias($alias, $target);
-    }
-
-    /**
-     * Set multiple Service Providerss.
-     *
-     * @param array $aliases
-     * @return void
-     */
-    public function setAliases(array $aliases): void
-    {
-        array_walk($aliases, fn($target, $alias) => $this->container->setAlias($alias, $target));
-    }
-
-    /**
-     * Resolve a Class or Class alias.
-     *
-     * @param string $class
-     * @param array $args
-     * @return mixed
-     */
-    public function make(string $class, array $args = []): mixed
-    {
-        return $this->container->make($class, $args);
-    }
-
-    /**
-     * Resolve and Call a function or Closure.
-     *
-     * @param callable|\Closure $function
-     * @return void
-     */
-    public function call(callable | \Closure $function)
-    {
-        return $this->container->call($function);
-    }
-
-    /**
-     * Add a new Event Listener.
-     *
-     * @param string $event The desired event to listen for, or the event class.
-     * @param mixed $callback The desired callback function or closure, which 
-     *              should be dispatched for this event.
-     * @param integer $priority The desired priority of this event.
-     * @return void
-     */
-    public function addListener(string $event, mixed $callback, int $priority = 100): void
-    {
-        $this->eventManager->addListener($event, $callback, $priority);
-    }
-
-    /**
-     * Dispatch an Event
-     *
-     * @param EventContract $event
-     * @return EventContract
-     */
-    public function dispatch(EventContract $event): EventContract
-    {
-        return $this->eventManager->dispatch($event);
+        if (file_exists($filepath)) {
+            require_once $filepath;
+        }
     }
 
     /**
@@ -559,8 +440,42 @@ class Application
      */
     public function finalize(?string $runtime = null)
     {
+        if ($this->hasPath(':cache') && $this->hasPath(':data')) {
+            //$this->loadCaches();
+        }
+
+        // Initial Runtime
         if (!empty($runtime)) {
             $instance = $this->make($runtime);
+        }
+
+        // Load Caches
+        if ($this->hasPath(':cache')) {
+/*
+            $configCachePool = new MixFileCachePool();
+
+            $configCache = $configCachePool->getItem('config');
+
+            if (!$configCache->isPersistent()) {
+                $configCache->push($this->resolvePath(':data/config.php'));
+            }
+            
+
+
+            $fileCachePool = new FileCachePool($this->resolvePath(':cache'));
+            $this->cacheManager->setCache('crate', $fileCachePool);
+
+            $config = $fileCachePool->getItem('config');
+
+            if ($fileCachePool->hasItem('config') && !$fileCachePool->isExpired('config')) {
+                $config = $fileCachePool->getItem('config');
+                if (empty ($config)) {
+                    $fileCachePool->removeItem('config');
+                } else {
+                    array_walk($config, fn($data, $alias) => $this->configurator->setConfiguration($alias, $data));
+                }
+            }
+            */
         }
 
         // Set default timezone
@@ -609,14 +524,27 @@ class Application
             $request = Request::createFromGlobals();
         }
 
-        /** @var Router */
-        $router = $this->container->make(Router::class);
+        // Dispatch Run Application
+        $this->eventManager->dispatch(
+            new ApplicationEvent('run', [$this, $request])
+        );
 
-        $response = $router->dispatch($request);
-        if (!($response instanceof Response)) {
-            throw new CitrusException("Received invalid response from route.");
+        /** @var RequestEvent - Handle Request */
+        $event = $this->eventManager->dispatch(
+            new RequestEvent([$request])
+        );
+
+        // Default Action
+        if (!$event->isPrevented()) {
+            /** @var Router */
+            $router = $this->container->make(Router::class);
+    
+            $response = $router->dispatch($request);
+            if (!($response instanceof Response)) {
+                throw new CitrusException("Received invalid response from route.");
+            }
+            print($response);
         }
-        print($response);
     }
 
     /**

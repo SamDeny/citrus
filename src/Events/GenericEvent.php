@@ -68,6 +68,16 @@ class GenericEvent implements EventContract
     }
 
     /**
+     * Get specific Argument
+     *
+     * @return mixed
+     */
+    public function getArgument(int $num): mixed
+    {
+        return $this->arguments[$num] ?? null;
+    }
+
+    /**
      * Get Arguments
      *
      * @return array

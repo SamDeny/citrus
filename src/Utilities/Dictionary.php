@@ -149,7 +149,7 @@ class Dictionary implements ArrayAccess, Countable, Iterator, Serializable
     {
         $path = explode('.', $offset);
 
-        $travel = $this->stack;
+        $travel = $this->dictionary;
         foreach($path AS $name) {
             if (!array_key_exists($name, $travel)) {
                 return false;
@@ -170,7 +170,7 @@ class Dictionary implements ArrayAccess, Countable, Iterator, Serializable
     {
         $path = explode('.', $offset);
 
-        $travel = $this->stack;
+        $travel = $this->dictionary;
         foreach($path AS $name) {
             if (!array_key_exists($name, $travel)) {
                 return null;
@@ -193,7 +193,7 @@ class Dictionary implements ArrayAccess, Countable, Iterator, Serializable
         $path = explode('.', $offset);
         $key = array_pop($path);
 
-        $travel = &$this->stack;
+        $travel = &$this->dictionary;
         foreach($path AS $name) {
             if (array_key_exists($name, $travel)) {
                 $travel = &$travel[$name];
@@ -216,7 +216,7 @@ class Dictionary implements ArrayAccess, Countable, Iterator, Serializable
         $path = explode('.', $offset);
         $key = array_pop($path);
         
-        $travel = &$this->stack;
+        $travel = &$this->dictionary;
         foreach($path AS $name) {
             if (array_key_exists($name, $travel)) {
                 $travel = &$travel[$name];
@@ -228,6 +228,20 @@ class Dictionary implements ArrayAccess, Countable, Iterator, Serializable
         if (array_key_exists($key, $travel)) {
             unset($travel[$key]);
         }
+    }
+
+    /**
+     * Recursively merged the data array
+     *
+     * @param array $data
+     * @return void
+     */
+    public function merge(array $data): void
+    {
+        $this->dictionary = array_merge_recursive(
+            $this->dictionary,
+            $data
+        );
     }
 
     /**

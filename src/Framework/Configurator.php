@@ -3,6 +3,10 @@
 namespace Citrus\Framework;
 
 use Citrus\Exceptions\CitrusException;
+use Citrus\FileSystem\Parser\PHPParser;
+use Citrus\FileSystem\Parser\INIParser;
+use Citrus\FileSystem\Parser\JSONParser;
+use Citrus\FileSystem\Parser\YAMLParser;
 use Citrus\Utilities\Dictionary;
 use Citrus\Utilities\Str;
 
@@ -167,9 +171,9 @@ class Configurator
         // Parse subsequently Environments 
         if ($loadSubs && !empty($contextKey) && isset($result[$contextKey])) {
             $context = strtolower($result[$contextKey]);
-    
+            
             $subEnv = dirname($path) . DIRECTORY_SEPARATOR . ".env.{$context}";
-            if (file_exists($subEnv)) {
+            if (!file_exists($subEnv)) {
                 $subEnv = dirname($path) . DIRECTORY_SEPARATOR . ".{$context}.env";
             }
 
@@ -261,7 +265,7 @@ class Configurator
 
             // Evaluation
             if (strpos($temp, '${') === 0 && $temp[strlen($temp)-1] === '}') {
-                $evaluate[$key] = substr($temp, 2, -1);
+                $evaluate[$key] = substr($value, 2, -1);
                 $value = chr(0);
             }
 
@@ -297,6 +301,52 @@ class Configurator
     }
 
     /**
+     * Get current Application Context.
+     *
+     * @param string $key
+     * @return string
+     */
+    public function getContext(): string
+    {
+        return strtolower($this->getEnvironment(
+            $this->getContextKey(), 'production'
+        ));
+    }
+
+    /**
+     * Check if the current application context is "Production".
+     *
+     * @return boolean
+     */
+    public function isProduction(): bool
+    {
+        $context = $this->getContext();
+        return $context === 'production' || $context === 'prod';
+    }
+
+    /**
+     * Check if the current application context is "Staging".
+     *
+     * @return boolean
+     */
+    public function isStaging(): bool
+    {
+        $context = $this->getContext();
+        return $context === 'staging' || $context === 'stage';
+    }
+
+    /**
+     * Check if the current application context is "Development".
+     *
+     * @return boolean
+     */
+    public function isDevelopment(): bool
+    {
+        $context = $this->getContext();
+        return $context === 'development' || $context === 'dev';
+    }
+
+    /**
      * Set Configuration using an alias and the raw config data.
      *
      * @param string $alias
@@ -305,7 +355,11 @@ class Configurator
      */
     public function setConfiguration(string $alias, array $config)
     {
-        $this->configurations[$alias] = $config;
+        if (isset($this->configurations[$alias])) {
+            $this->configurations->merge([$alias => $config]);
+        } else {
+            $this->configurations[$alias] = $config;
+        }
     }
 
     /**
@@ -322,6 +376,46 @@ class Configurator
         } else {
             return $default;
         }
+    }
+
+    /**
+     * Parse a Configuration file.
+     *
+     * @param string $filepath
+     * @param string $format
+     * @return array
+     */
+    public function parseConfiguration(string $filepath, string $format = 'php'): array
+    {
+        if ($format === 'php') {
+            return PHPParser::parseFile($filepath);
+        } else if ($format === 'json') {
+            $data = JSONParser::parseFile($filepath);
+        } else if ($format === 'ini') {
+            $data = INIParser::parseFile($filepath);
+        } else if ($format === 'yaml') {
+            $data = YAMLParser::parseFile($filepath);
+        }
+
+        $self = $this;
+        array_walk_recursive($data, function (&$value, $key) use ($self) {
+            if (strpos($value, '${') === false) {
+                return;
+            }
+            if (($index = strpos($value, ' || ')) !== false) {
+                $key = trim(substr($value, 2, $index));
+                $default = trim(substr($value, $index+4, -1));
+
+                if (($default[0] === '"' || $default[0] == "'") && $default[0] === $default[strlen($default)-1]) {
+                    $default = substr($default, 1, -1);
+                }
+            } else {
+                $key = $value;
+                $default = null;
+            }
+            $value = $self->getEnvironment($key, $default);
+        });
+        return $data;
     }
 
 }

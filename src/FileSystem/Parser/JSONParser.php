@@ -87,9 +87,9 @@ class JSONParser implements ParserContract
      *
      * @param mixed $content
      * @param array $attributes Additional attributes for the Parser engine.
-     * @return null|string
+     * @return ?string
      */
-    static public function emit(mixed $content, array $attributes = [])
+    static public function emit(mixed $content, array $attributes = []): ?string
     {
         if (!is_iterable($content) || empty($content)) {
             return null;
@@ -109,7 +109,7 @@ class JSONParser implements ParserContract
      * @param array $attributes Additional attributes for the Parser engine.
      * @return boolean
      */
-    static public function emitFile(mixed $content, string $filepath, array $attributes = [])
+    static public function emitFile(mixed $content, string $filepath, array $attributes = []): bool
     {
         if (!is_iterable($content) || empty($content)) {
             return false;
