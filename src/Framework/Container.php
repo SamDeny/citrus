@@ -223,16 +223,30 @@ class Container
     {
         $ref = new ReflectionClass($class);
         $params = [];
-
+        $isInstance = fn($arg) => is_object($arg) && ($x = get_class($arg)) && $x !== 'stdClass';
+        $types = array_map(fn ($arg) => $isInstance($arg)? $arg::class: gettype($arg), $args);
+        
         // Resolve
         $constructor = $ref->getConstructor();
         if ($constructor) {
             foreach ($constructor->getParameters() AS $arg) {
+                if ($arg->getType() === null) {
+                    $params[] = array_shift($args);
+                    array_shift($types);
+                    continue;
+                }
                 $type = $arg->getType()->getName();
-                if (class_exists($type)) {
-                    $params[] = $this->make($type);
+
+                // Make value, prefer values in $args
+                if (($index = array_search($type, $types)) !== false) {
+                    $params[] = array_splice($args, $index, 1)[0];
+                    array_splice($types, $index, 1);
                 } else {
-                    break;
+                    if (class_exists($type)) {
+                        $params[] = $this->make($type);
+                    } else {
+                        break;
+                    }
                 }
             }
         }

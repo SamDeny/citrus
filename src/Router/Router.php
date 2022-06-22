@@ -413,7 +413,7 @@ REGEX;
         } else {
             $handler = $route->handler();
             if (is_array($handler)) {
-                $handler[0] = citrus()->make($handler[0]);
+                $handler[0] = citrus()->make($handler[0], [$request, $route]);
                 return call_user_func($handler, $request, ...$route->params());
             } else {
                 return call_user_func($handler, $request, ...$route->params());
