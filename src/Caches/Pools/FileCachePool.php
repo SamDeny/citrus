@@ -1,6 +1,6 @@
 <?php declare(strict_types=1);
 
-namespace Citrus\Caches;
+namespace Citrus\Caches\Pools;
 
 use Citrus\Contracts\CacheContract;
 use Citrus\Contracts\CachePoolContract;

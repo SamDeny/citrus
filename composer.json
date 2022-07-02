@@ -2,35 +2,45 @@
     "name": "crate/citrus",
     "type": "library",
     "version": "0.1.0",
-    "description": "The main Application Framework behind our headless API-driven Crate CMS.",
+    "description": "The main Application Framework behind our decoupled RESTful-API-driven Crate CMS.",
     "keywords": [
         "application",
         "framework",
-        "router",
-        "routing",
-        "psr"
+        "crate",
+        "citrus"
     ],
     "homepage": "https://crate.md",
     "license": "MIT",
     "authors": [
         {
-            "name": "rat.md",
-            "email": "info@crate.md",
+            "name": "Sam (rat.md)",
+            "email": "sam@rat.md",
+            "homepage": "https://rat.md",
             "role": "Developer"
         }
     ],
+    "support": {
+        "email": "help@crate.md",
+        "issues": "https://github.com/CrateProject/Citrus/issues",
+        "forum": "https://crate.md/support/forum",
+        "wiki": "https://docs.crate.md/citrus",
+        "source": "https://github.com/CrateProject/Citrus",
+        "docs": "https://docs.crate.md/citrus"
+    },
     "require": {
         "php": "^8.0.0",
-        "ext-json": "*",
         "ext-mbstring": "*",
         "php-ds/php-ds": "^1.4",
+        "symfony/polyfill-mbstring": "^1.26.0",
+        "symfony/polyfill-uuid": "^1.26.0",
         "symfony/yaml": "^6.0"
     },
     "require-dev": {
         "symfony/var-dumper": "^6.0"
     },
     "suggest": {
-        "ext-ds": "Increase performance by using the DS extension instead of the polyfill."
+        "ext-ds": "Increase performance by using the DS extension instead of the polyfill.",
+        "ext-yaml": "Increase performance by using the native YAML extension instead of Symfony's package."
     },
     "autoload": {
         "psr-4": {

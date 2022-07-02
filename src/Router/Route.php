@@ -2,7 +2,10 @@
 
 namespace Citrus\Router;
 
+use Citrus\Contracts\MiddlewareContract;
 use Citrus\Exceptions\RouterException;
+use Citrus\Exceptions\RuntimeException;
+use Citrus\Exceptions\UnmetContractException;
 
 /**
  * Citrus Router / Route
@@ -300,15 +303,30 @@ class Route
      * @param boolean $append
      * @return array|Route
      */
-    public function middleware(null|string|array $middleware, bool $append = true): array|Route
+    public function middleware(null|string|array $middleware = null, bool $append = true): array|Route
     {
         if (is_null($middleware)) {
             return $this->middleware;
         } else {
+            if (!is_array($middleware)) {
+                $middleware = [$middleware];
+            }
+
+            // Validate Middleware
+            array_map(function ($cls) {
+                if (!class_exists($cls)) {
+                    throw new RuntimeException("The passed route middleware '$cls' does not exist or could not be loaded.");
+                }
+                if (!in_array(MiddlewareContract::class, class_implements($cls))) {
+                    throw new UnmetContractException("The passed route middleware '$cls' does not implement the '".MiddlewareContract::class."' contract.");
+                }
+            }, $middleware);
+
+            // Append Middleware
             if ($append) {
-                $this->middleware = array_merge($this->middleware, is_array($middleware)? $middleware: [$middleware]);
+                $this->middleware = array_merge($this->middleware, $middleware);
             } else {
-                $this->middleware = is_array($middleware)? $middleware: [$middleware];
+                $this->middleware = $middleware;
             }
             return $this;
         }

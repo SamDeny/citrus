@@ -148,4 +148,48 @@ class FileSystem
         }
     }
 
+    /**
+     * Iterate through $depth folders and return everyone which contains $files.
+     *
+     * @param string|array $files
+     * @param integer $depth
+     * @return mixed
+     */
+    public function contains(string|array $files, int $depth = 0): mixed
+    {
+        if ($this->type !== 'DIR') {
+            throw new CitrusException('The passed filepath is not a directory.');
+        }
+
+        $files = !is_array($files)? [$files]: $files;
+        $handle = opendir($this->root);
+
+        while (($item = readdir($handle)) !== false) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+
+            $fullpath = $this->root . DIRECTORY_SEPARATOR . $item;
+            if (!is_dir($fullpath)) {
+                continue;
+            }
+
+            $valid = true;
+            foreach ($files AS $file) {
+                if (!file_exists($fullpath . DIRECTORY_SEPARATOR . $file)) {
+                    $valid = false;
+                    break;
+                }
+            }
+
+            if ($valid) {
+                yield $fullpath;
+            } else if ($depth > 0) {
+                yield from (new static($fullpath))->contains($files, $depth-1);
+            }
+        }
+
+        closedir($handle);
+    }
+
 }

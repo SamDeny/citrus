@@ -444,6 +444,13 @@ class Application
             //$this->loadCaches();
         }
 
+        // Load User Configuration
+        $userConfig = $this->resolvePath(':data/config.php');
+        if (file_exists($userConfig)) {
+            $config = include $userConfig;
+            array_walk($config, fn($value, $key) => $this->configurator->setConfiguration($key, $value));
+        }
+
         // Initial Runtime
         if (!empty($runtime)) {
             $instance = $this->make($runtime);

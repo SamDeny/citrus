@@ -110,11 +110,22 @@ REGEX;
         }
 
         if (isset($this->shared['prefix'])) {
-            $routepath = $this->shared['prefix'] . rtrim($routepath, '/');
+            $routepath = $this->shared['prefix'] . $routepath;
         }
+        if (!str_ends_with($routepath, '/')) {
+            $routepath .= '/';
+        }
+        $routepath = str_replace('//', '/', $routepath);
 
         $details = $this->parse($routepath);
         $route = new Route($methods, $routepath, $handler, $details);
+
+        // Append Middleware
+        if (isset($this->shared['middleware'])) {
+            $route->middleware($this->shared['middleware']);
+        }
+
+        // Generate Route
         foreach ($route->methods() as $method) {
             foreach ($route->details() as $routeData) {
                 $this->generator->addRoute($method, $routeData, $route);
@@ -359,6 +370,7 @@ REGEX;
      */
     public function ctrl(string $strict, string $controller): Router
     {
+        $routes = [];
         foreach (class_implements($controller) AS $interface) {
             if (!array_key_exists($interface, self::$definitions)) {
                 continue;
@@ -367,7 +379,7 @@ REGEX;
 
             foreach ($definitions AS $route) {
                 [$methods, $route, $action] = $route;
-                $this->route(
+                $routes[] = $this->route(
                     $methods, 
                     '/' . trim($strict, '/') . rtrim($route, '/'), 
                     [$controller, $action]
@@ -405,12 +417,33 @@ REGEX;
 
         $route = $this->dispatcher->dispatch(
             $request->method(),
-            rtrim($request->target(), '/')
+            rtrim($request->target(), '/') . '/'
         );
 
         if (is_array($route)) {
 
         } else {
+            $travel = $route->middleware();
+            $travel[] = $route->handler();
+
+            $next = null;
+            $dispatch = function () use (&$next, $request, $route, &$travel) {
+                $caller = array_shift($travel);
+
+                if (empty($travel)) {
+                    if (is_array($caller)) {
+                        $caller[0] = citrus()->make($caller[0], [$request, $route]);
+                    }
+                    return call_user_func($caller, $request, ...$route->params());
+                } else {
+                    $caller = citrus()->make($caller);
+                    return call_user_func([$caller, 'process'], $request, $next);
+                }
+            };
+            $next = $dispatch;
+            return $dispatch();
+
+            /*
             $handler = $route->handler();
             if (is_array($handler)) {
                 $handler[0] = citrus()->make($handler[0], [$request, $route]);
@@ -418,6 +451,7 @@ REGEX;
             } else {
                 return call_user_func($handler, $request, ...$route->params());
             }
+            */
         }
     }
 

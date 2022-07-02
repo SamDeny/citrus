@@ -303,49 +303,51 @@ class Response
         }
 
         // Set Basic HTML Headers
-        header("HTTP/{$this->protocol} {$this->status} {$this->phrase}");
-        header("Content-Type: {$contentType}");
-        header("Content-Length: ". strlen($content));
+        if (!headers_sent()) {
+            header("HTTP/{$this->protocol} {$this->status} {$this->phrase}");
+            header("Content-Type: {$contentType}");
+            header("Content-Length: ". strlen($content));
 
-        // Set Caching Header
-        if ($this->caching) {
-            $expires = $this->getHeader('Expires') ?? $this->expires ?? null;
-            $control = $this->getHeader('Cache-Control') ?? $this->control ?? null;
-            if (empty($expires) || empty($control)) {
-                throw new CitrusException('The Expires and Cache-Control data must be set when caching is enabled.');
-            }
-
-            header("Cache-Control: {$control}");
-            header("Expires: {$expires}");
-        } else {
-            header('Cache-Control: no-cache, must-revalidate');
-            header('Expires: Fri, 01 Jan 1990 00:00:00 GMT');
-            header('Pragma: no-cache');
-        }
-
-        // Set ETag
-        if ($this->etag) {
-            if ($this->etag === true) {
-                if (!$this->etagHandler || !is_callable($this->etagHandler)) {
-                    throw new CitrusException('The ETag header requires either a callable function or a custom ID.');
+            // Set Caching Header
+            if ($this->caching) {
+                $expires = $this->getHeader('Expires') ?? $this->expires ?? null;
+                $control = $this->getHeader('Cache-Control') ?? $this->control ?? null;
+                if (empty($expires) || empty($control)) {
+                    throw new CitrusException('The Expires and Cache-Control data must be set when caching is enabled.');
                 }
-                $etag = call_user_func($this->etagHandler, $content);
-            } else {
-                $etag = $this->etag;
-            }
-            header('ETag: '. ($this->etagWeak? 'W/': '') .'"'. $etag .'"');
-        }
 
-        // Loop other Headers
-        foreach ($this->getHeaders() AS $header => $values) {
-            if(in_array($header, ['Content-Type', 'Content-Length', 'Cache-Control', 'Expires', 'Pragma'])) {
-                continue; // Skip Managed Headers
+                header("Cache-Control: {$control}");
+                header("Expires: {$expires}");
+            } else {
+                header('Cache-Control: no-cache, must-revalidate');
+                header('Expires: Fri, 01 Jan 1990 00:00:00 GMT');
+                header('Pragma: no-cache');
             }
 
-            if (is_array($values)) {
-                array_map(fn($val) => header("$header: $val", false), $values);
-            } else {
-                header("$header: $values");
+            // Set ETag
+            if ($this->etag) {
+                if ($this->etag === true) {
+                    if (!$this->etagHandler || !is_callable($this->etagHandler)) {
+                        throw new CitrusException('The ETag header requires either a callable function or a custom ID.');
+                    }
+                    $etag = call_user_func($this->etagHandler, $content);
+                } else {
+                    $etag = $this->etag;
+                }
+                header('ETag: '. ($this->etagWeak? 'W/': '') .'"'. $etag .'"');
+            }
+
+            // Loop other Headers
+            foreach ($this->getHeaders() AS $header => $values) {
+                if(in_array($header, ['Content-Type', 'Content-Length', 'Cache-Control', 'Expires', 'Pragma'])) {
+                    continue; // Skip Managed Headers
+                }
+
+                if (is_array($values)) {
+                    array_map(fn($val) => header("$header: $val", false), $values);
+                } else {
+                    header("$header: $values");
+                }
             }
         }
 

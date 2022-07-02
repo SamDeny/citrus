@@ -238,10 +238,16 @@ class Dictionary implements ArrayAccess, Countable, Iterator, Serializable
      */
     public function merge(array $data): void
     {
-        $this->dictionary = array_merge_recursive(
-            $this->dictionary,
-            $data
-        );
+        $recursive = function($data, $recursive, &$dictionary) {
+            foreach ($data AS $key => $value) {
+                if (!is_array($value) || (is_array($value) && !array_key_exists($key, $dictionary))) {
+                    $dictionary[$key] = $value;
+                } else {
+                    $recursive($value, $recursive, $dictionary[$key]);
+                }
+            }
+        };
+        $recursive($data, $recursive, $this->dictionary);
     }
 
     /**

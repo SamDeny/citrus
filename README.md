@@ -7,23 +7,19 @@ provides the following features, and while it is **mostly** designed as general-
 it is more aimed to fit our own [Crate CMS]() itself.
 
 - CLI Console Command handling
-- HTTP Request / Response Handling [\3]
+- HTTP Request / Response Handling [\2]
 - HTTP Middleware Router [\1]
-- Error / Trace Logging [\3]
-- File / Database Caching [\3]
-- Event Handling [\3]
-- Database Abstraction (using MongoDB, MySQLi, SQLite3, ~~PDO~~[\2] and ~~PostgreSQL~~[\2])
-- Application Container (with Factories and Services) [\3]
-- Additional generally-usefull Utilities and Structures
+- Error / Trace Logging [\2]
+- File / Database Caching [\2]
+- Event Handling [\2]
+- Application Container (with Factories and Services) [\2]
+- Additional generally-useful Utilities and Structures
 
 [\1] The HTTP middleware router is based on [nikic/FastRoute](https://github.com/nikic/FastRoute). 
 Since FastRoute isn't active developed, we took over the parts we need and modified it accordingly 
 to fit Citrus' environment.
 
-[\2] The current version of Citrus does not support PDO / PostgreSQL right now, but both database 
-systems will be added in a future release.
-
-[\3] Many features of Citrus are inspired by one or more official PSR PHP-recommendations, but do 
+[\2] Many features of Citrus are inspired by one or more official PSR PHP-recommendations, but do 
 **NOT** follow any of those directly. Thus, saying Citrus is PSR-compatible is not true!
 
 
@@ -42,18 +38,6 @@ extensions itself to increase the overall performance:
 
 Extensions where a fallback is provided aren't listed in the `requires` field within the composer 
 file, but in the `suggest` one instead.
-
-
-### Database Requirements
-
-Using the database abilities of Citrus also requires you to install at least one of the following 
-extensions or packages (regarding the database driver you wanna use for your project):
-
-- [mongodb](https://www.php.net/manual/en/set.mongodb.php) (requires the [mongodb/mongodb](https://packagist.org/packages/mongodb/mongodb) package as well)
-- [mysqli](https://www.php.net/manual/en/book.mysqli.php)
-- [sqlite3](https://www.php.net/manual/en/book.sqlite3.php)
-- ~~[pdo](https://www.php.net/manual/en/book.pdo.php)~~ _PDO is not supported at the moment (will be added in a future release)_
-- ~~[pgsql](https://www.php.net/manual/en/book.pgsql.php)~~ _PostgreSQL is not supported at the moment (will be added in a future release)_
 
 
 ### Security Requirements 

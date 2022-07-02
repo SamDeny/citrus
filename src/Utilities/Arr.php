@@ -10,7 +10,7 @@ class Arr
      *
      * @param array $array The target array to flatten.
      * @param integer $depth The depth level specifying how deep a nested array 
-     *                tructure should be flattened. Use -1 to reduce to a single
+     *                structure should be flattened. -1 to reduce to a single
      *                array.
      * @return array
      */

@@ -51,6 +51,19 @@ class Writer
     }
 
     /**
+     * Write a header Line
+     *
+     * @param string $message
+     * @return void
+     */
+    public function head(string $message = '', string $color = '')
+    {
+        $this->lastMessage = $message . "\n";
+        print($this->{$color}($message) . "\n");
+        print($this->{$color}(str_repeat('=', strlen($message))) . "\n");
+    }
+
+    /**
      * Print a question and ask for input.
      *
      * @param string $question
@@ -59,11 +72,6 @@ class Writer
      */
     public function input(string $question = '', bool $hideInput = false): string
     {
-        if (!empty($question) && $question[strlen($question)-1] !== ' ') {
-            $question .= ' ';
-        }
-
-
         //@todo find a Windows / stty-less solution, which does not require 
         // using a different language (VBScript) or PowerShell or an executable 
         // file... or any kind of hacks.
@@ -71,15 +79,43 @@ class Writer
             if (!empty($question)) {
                 print($question);
             }
-            
-            system('stty -echo');
-            $answer = trim(fgets(STDIN));
-            system('stty echo');
+
+            if (stripos(\PHP_OS, 'WIN') === 0) {
+                $handle = fopen('php://stdin', 'r');
+                $answer = trim(fgets($handle));
+                echo "\r\x1b[K";
+                echo "\033[1A\033[K";
+                fclose($handle);
+                echo $question;
+                echo '***';
+            } else {
+                system('stty -echo');
+                $input = trim(fgets(STDIN));
+                system('stty echo');
+            }
 
             return $answer;
         } else {
-            return readline($question);
+            if (!empty($question)) {
+                print($question);
+            }
+
+            $handle = fopen('php://stdin', 'r');
+            $input = trim(fgets($handle));
+            fclose($handle);
+            return $input;
         }
+    }
+
+    /**
+     * Execute a Console Form
+     *
+     * @param Form $form
+     * @return ?array
+     */
+    public function form(Form $form): ?array
+    {
+        return $form->perform($this);
     }
 
     /**

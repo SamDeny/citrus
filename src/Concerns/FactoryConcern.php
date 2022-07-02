@@ -22,7 +22,6 @@ abstract class FactoryConcern implements MultitonContract
      */
     public function __construct(Application $citrus)
     {
-        echo '-';
         $this->application = $citrus;
     }
 

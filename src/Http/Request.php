@@ -3,6 +3,7 @@
 namespace Citrus\Http;
 
 use Citrus\Exceptions\CitrusException;
+use Citrus\Exceptions\RuntimeException;
 use Ds\Map;
 
 class Request
@@ -184,6 +185,13 @@ class Request
      * @var array
      */
     protected array $files;
+
+    /**
+     * Custom Request Properties
+     *
+     * @var array
+     */
+    protected array $properties = [];
 
     /**
      * Create a new Request.
@@ -598,6 +606,37 @@ class Request
     public function file(string $key): ?File
     {
         return $this->files[$key] ?? null;
+    }
+
+    /**
+     * Extend the Request with custom properties.
+     *
+     * @param string $key
+     * @param mixed $object
+     * @return self
+     */
+    public function extend(string $key, mixed $object): self
+    {
+        if (array_key_exists($key, $this->properties)) {
+            throw new RuntimeException("The passed Request property '$key' does already exist.");
+        }
+        $this->properties[$key] = $object;
+        return $this;
+    }
+
+    /**
+     * Receive Request custom property.
+     *
+     * @param string $key
+     * @return mixed
+     */
+    public function receive(string $key): mixed
+    {
+        if (array_key_exists($key, $this->properties)) {
+            return $this->properties[$key];
+        } else {
+            return null;
+        }
     }
 
 }

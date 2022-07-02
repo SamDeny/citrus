@@ -1,6 +1,6 @@
 <?php declare(strict_types=1);
 
-namespace Citrus\Framework;
+namespace Citrus\Factories;
 
 use Citrus\Exceptions\CitrusException;
 

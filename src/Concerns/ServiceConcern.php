@@ -13,7 +13,7 @@ abstract class ServiceConcern implements SingletonContract
      *
      * @var Application
      */
-    protected Application $application;
+    protected Application $app;
 
     /**
      * Create a new [Service] Provider.
@@ -22,7 +22,7 @@ abstract class ServiceConcern implements SingletonContract
      */
     public function __construct(Application $citrus)
     {
-        $this->application = $citrus;
+        $this->app = $citrus;
     }
 
     /**
